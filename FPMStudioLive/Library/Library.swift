@@ -13,12 +13,12 @@ enum SongKind: String, Codable {
     static func of(_ url: URL) -> SongKind? {
         switch url.pathExtension.lowercased() {
         case "mid", "midi", "kar", "rmi": return .midi
-        case "mp3", "m4a", "wav", "aif", "aiff", "flac", "caf", "aac": return .audio
+        case "mp3", "m4a", "wav", "aif", "aiff", "flac", "caf", "aac", "ogg", "zip", "cdg": return .audio
         case "mp4", "mov", "m4v": return .video
         default: return nil
         }
     }
-    static let extensions = ["mid", "midi", "kar", "rmi", "mp3", "m4a", "wav", "aif", "aiff", "flac", "caf", "aac", "mp4", "mov", "m4v"]
+    static let extensions = ["mid", "midi", "kar", "rmi", "mp3", "m4a", "wav", "aif", "aiff", "flac", "caf", "aac", "ogg", "zip", "cdg", "mp4", "mov", "m4v"]
 }
 
 struct LibraryItem: Identifiable, Hashable, Codable {
@@ -109,6 +109,9 @@ final class Library: ObservableObject {
             for f in folders {
                 guard let en = fm.enumerator(at: URL(fileURLWithPath: f), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { continue }
                 for case let u as URL in en where SongKind.extensions.contains(u.pathExtension.lowercased()) {
+                    let ext = u.pathExtension.lowercased()
+                    // Il .cdg compare già tramite il suo MP3; gli ZIP solo se sembrano karaoke (MP3+G).
+                    if ext == "cdg" && MediaResolver.sibling(of: u, exts: MediaResolver.audioExts) != nil { continue }
                     found.append(LibraryItem(url: u))
                 }
             }

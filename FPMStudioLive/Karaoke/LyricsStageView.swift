@@ -22,13 +22,20 @@ struct LyricsStageView: View {
         GeometryReader { geo in
             ZStack {
                 Theme.background
-                if showVideo, let vp = player.videoPlayer {
-                    VideoLayerView(player: vp).opacity(0.85)
-                    LinearGradient(gradient: Gradient(colors: [.clear, Color.black.opacity(0.75)]), startPoint: .center, endPoint: .bottom)
+                if let img = clock.cdgImage {
+                    // Karaoke CD+G: la grafica contiene già il testo.
+                    Color.black
+                    Image(decorative: img, scale: 1).interpolation(.none).resizable()
+                        .aspectRatio(CGFloat(CDGDecoder.visibleWidth) / CGFloat(CDGDecoder.visibleHeight), contentMode: .fit)
+                } else if showVideo, let vp = player.videoPlayer {
+                    VideoLayerView(player: vp)
+                    if !player.lyrics.isEmpty {
+                        LinearGradient(gradient: Gradient(colors: [.clear, Color.black.opacity(0.7)]), startPoint: .center, endPoint: .bottom)
+                    }
                 } else {
                     Image("Logo").resizable().scaledToFit().opacity(0.07).padding(geo.size.height * 0.08)
                 }
-                content(size: geo.size)
+                if clock.cdgImage == nil || !player.lyrics.isEmpty { content(size: geo.size) }
                 if let b = player.banner, !b.isEmpty {
                     VStack {
                         Spacer()
@@ -57,6 +64,10 @@ struct LyricsStageView: View {
                 Text(next).font(.system(size: fs, weight: .heavy)).foregroundStyle(Theme.gradient).multilineTextAlignment(.center)
                 Text("\(Int(countdown.rounded(.up)))").font(.system(size: fs * 0.8, weight: .bold, design: .rounded)).foregroundColor(Theme.ink)
             }.padding()
+        } else if player.lyrics.isEmpty && (player.videoPlayer != nil || clock.cdgImage != nil) {
+            EmptyView()
+        } else if !player.lyrics.isEmpty && player.lyrics.lines.allSatisfy({ $0.startTime < 0 }) {
+            teleprompter(size: size, fs: fs)
         } else if player.lyrics.isEmpty {
             VStack(spacing: 10) {
                 Text(player.lyrics.title ?? player.item?.title ?? "").font(.system(size: fs * 0.9, weight: .heavy)).foregroundStyle(Theme.gradient)
@@ -102,6 +113,22 @@ struct LyricsStageView: View {
             }
             .padding(.horizontal, 24)
         }
+    }
+
+    /// Testo non sincronizzato: scorre in proporzione all'avanzamento del brano.
+    private func teleprompter(size: CGSize, fs: CGFloat) -> some View {
+        let lines = player.lyrics.lines
+        let frac = player.duration > 0 ? max(0, min(1, player.position / player.duration)) : 0
+        let center = Int((Double(lines.count) * frac).rounded(.down))
+        let from = max(0, center - 1), to = min(lines.count, center + 4)
+        return VStack(spacing: fs * 0.3) {
+            Text("Testo non sincronizzato · scorre con il brano").font(.system(size: fs * 0.22, weight: .bold)).foregroundColor(Theme.soft)
+            ForEach(from..<to, id: \.self) { i in
+                Text(lines[i].text).font(.system(size: (i == center ? fs * 0.8 : fs * 0.6), weight: .heavy, design: .rounded))
+                    .foregroundColor(i == center ? Theme.cyan : Theme.ink.opacity(0.6))
+                    .lineLimit(1).minimumScaleFactor(0.4)
+            }
+        }.padding(.horizontal, 24)
     }
 
     private func lineProgress(_ idx: Int, current: Int, t: Double) -> (syllable: Int, fraction: Double) {
@@ -189,25 +216,35 @@ struct LyricLineView: View {
 }
 
 /// Livello video AppKit (lo stesso AVPlayer può comparire anche sul secondo schermo).
+/// Il livello segue sempre le dimensioni della vista (prima poteva restare a dimensione zero).
+final class PlayerContainerView: NSView {
+    let playerLayer = AVPlayerLayer()
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
+        playerLayer.videoGravity = .resizeAspect
+        layer?.addSublayer(playerLayer)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) non usato") }
+    override func layout() {
+        super.layout()
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        playerLayer.frame = bounds
+        CATransaction.commit()
+    }
+}
+
 struct VideoLayerView: NSViewRepresentable {
     var player: AVPlayer
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        v.wantsLayer = true
-        let l = AVPlayerLayer(player: player)
-        l.videoGravity = .resizeAspect
-        l.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        v.layer = CALayer()
-        v.layer?.backgroundColor = NSColor.black.cgColor
-        v.layer?.addSublayer(l)
-        l.frame = v.bounds
+    func makeNSView(context: Context) -> PlayerContainerView {
+        let v = PlayerContainerView(frame: .zero)
+        v.playerLayer.player = player
         return v
     }
-    func updateNSView(_ v: NSView, context: Context) {
-        if let l = v.layer?.sublayers?.first as? AVPlayerLayer {
-            if l.player !== player { l.player = player }
-            l.frame = v.bounds
-        }
+    func updateNSView(_ v: PlayerContainerView, context: Context) {
+        if v.playerLayer.player !== player { v.playerLayer.player = player }
+        v.needsLayout = true
     }
 }
 

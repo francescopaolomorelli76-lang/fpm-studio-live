@@ -23,6 +23,9 @@ final class PianoStudioModel: ObservableObject {
     @Published var sections: [SongSection] = []
     @Published var selected: Set<UUID> = []
     @Published var options = PianoOptions() { didSet { if options != oldValue { generated = nil } } }
+    /// Traccia della melodia da togliere (riconosciuta automaticamente, modificabile).
+    @Published var melodyChannel: Int? { didSet { generated = nil } }
+    @Published private(set) var channelNames: [(ch: Int, name: String)] = []
     @Published var transpose = 0
     @Published var tempo = 1.0
     @Published var mastering: Mastering.Mode = .pro
@@ -48,6 +51,11 @@ final class PianoStudioModel: ObservableObject {
             lyrics = lyr
             let an = ChordEngine.analyze(m, lyrics: lyr, melodyOverride: side?.melodyChannel)
             analysis = an
+            melodyChannel = an.melodyChannel
+            channelNames = m.usedChannels.filter { $0 != 9 }.map { ch in
+                let track = m.notes.first { $0.channel == ch }.flatMap { m.trackNames[$0.track] } ?? ""
+                return (ch, "Canale \(ch + 1) · " + (track.isEmpty ? GM.name(m.programs[ch] ?? 0) : track))
+            }
             chordSummary = ChordEngine.events(an.regions, midi: m)
             sections = side?.sections ?? SongStructureAnalyzer.analyze(
                 SongStructureAnalyzer.input(midi: m, lyrics: lyr, chords: chordSummary, melodyChannel: an.melodyChannel))
@@ -69,7 +77,7 @@ final class PianoStudioModel: ObservableObject {
     func generate() -> MIDIFile? {
         if let g = generated { return g }
         guard let m = midi, let an = analysis else { return nil }
-        let data = PianoArranger(midi: m, regions: an.regions, sections: sections, options: options, bassChannels: an.bassChannels).arrange()
+        let data = PianoArranger(midi: m, regions: an.regions, sections: sections, options: options, bassChannels: an.bassChannels, melodyChannel: melodyChannel).arrange()
         generated = try? MIDIFile(data: data)
         return generated
     }
@@ -104,7 +112,7 @@ final class PianoStudioModel: ObservableObject {
             let p = NSSavePanel()
             p.nameFieldStringValue = base + ".mid"
             guard p.runModal() == .OK, let u = p.url else { return }
-            let data = PianoArranger(midi: midi!, regions: analysis!.regions, sections: sections, options: options, bassChannels: analysis!.bassChannels).arrange()
+            let data = PianoArranger(midi: midi!, regions: analysis!.regions, sections: sections, options: options, bassChannels: analysis!.bassChannels, melodyChannel: melodyChannel).arrange()
             do { try data.write(to: u); status = "MIDI salvato: \(u.lastPathComponent)" } catch { status = error.localizedDescription }
             return
         }
@@ -226,14 +234,28 @@ struct PianoStudioView: View {
                 }
             }
             VStack(spacing: 12) {
+                Panel(title: "Tipo di base", icon: "square.stack.3d.up") {
+                    Picker("", selection: $model.options.mode) { ForEach(AccompanimentMode.allCases) { Text($0.label).tag($0) } }
+                        .pickerStyle(.radioGroup).labelsHidden()
+                    Picker("Melodia da togliere", selection: Binding(get: { model.melodyChannel ?? -1 }, set: { model.melodyChannel = $0 < 0 ? nil : $0 })) {
+                        Text("Nessuna").tag(-1)
+                        ForEach(model.channelNames, id: \.ch) { c in Text(c.name).tag(c.ch) }
+                    }
+                    Text(model.options.mode == .pianoFromChords
+                         ? "Il pianoforte suona gli accordi di tutto il brano, dalla prima all'ultima battuta, senza melodia."
+                         : "Tutti gli strumenti del MIDI dall'inizio alla fine, tolta solo la traccia della melodia.")
+                        .font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true)
+                }
                 Panel(title: "Pianoforte", icon: "slider.horizontal.3") {
                     Picker("Stile", selection: $model.options.style) { ForEach(PianoStyle.allCases) { Text($0.label).tag($0) } }
                     Picker("Suono", selection: $model.options.program) {
                         Text("Gran coda").tag(0); Text("Pianoforte brillante").tag(1); Text("Piano elettrico a coda").tag(2); Text("Rhodes").tag(4)
                     }
                     Toggle("Semplifica in triadi", isOn: $model.options.simplifyToTriads)
-                    Toggle("Aggiungi basso originale", isOn: $model.options.keepOriginalBass)
-                    Toggle("Aggiungi batteria originale", isOn: $model.options.keepOriginalDrums)
+                    if model.options.mode == .pianoFromChords {
+                        Toggle("Aggiungi basso originale", isOn: $model.options.keepOriginalBass)
+                        Toggle("Aggiungi batteria originale", isOn: $model.options.keepOriginalDrums)
+                    }
                     Toggle("Umanizza (tempi e dinamiche)", isOn: $model.options.humanize)
                     Toggle("Rallentando e accordo finale", isOn: $model.options.finalRitardando)
                     HStack { Text("Dinamica"); Slider(value: $model.options.dynamics, in: 0.6...1.3) }

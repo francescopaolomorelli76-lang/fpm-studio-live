@@ -35,6 +35,9 @@ final class Deck: ObservableObject, Identifiable {
     @Published private(set) var waveform: [Float] = []
     @Published private(set) var leadIn = 0.0
     @Published private(set) var lastSound = 0.0
+    /// Battiti (secondi nel file) e indice del primo "uno" di battuta, dall'analisi.
+    private(set) var beats: [Double] = []
+    private(set) var downbeatOffset = 0
     @Published var cuePoint = 0.0
     @Published var error: String?
 
@@ -82,13 +85,19 @@ final class Deck: ObservableObject, Identifiable {
                     audioURL = try MIDIRenderCache.audioURL(for: url, soundBank: soundBank) { p in
                         DispatchQueue.main.async { self.loadProgress = p * 0.7 }
                     }
+                } else {
+                    // ZIP/MP3+G, e MP3 che Core Audio non apre direttamente (convertiti una volta in cache).
+                    audioURL = try AudioDecode.playableURL(MediaResolver.resolve(url).audio)
                 }
                 let f = try AVAudioFile(forReading: audioURL)
                 let an = try? AudioAnalyzer.analyze(url: audioURL) { p in
                     DispatchQueue.main.async { self.loadProgress = (isMIDI ? 0.7 : 0) + p * (isMIDI ? 0.3 : 1) }
                 }
                 DispatchQueue.main.async {
+                    self.connect(format: f.processingFormat)
                     self.file = f
+                    self.beats = an?.beats ?? []
+                    self.downbeatOffset = an?.downbeatOffset ?? 0
                     self.duration = Double(f.length) / f.processingFormat.sampleRate
                     self.bpm = an?.bpm
                     self.waveform = an?.waveform ?? []
@@ -103,22 +112,60 @@ final class Deck: ObservableObject, Identifiable {
             } catch {
                 DispatchQueue.main.async {
                     self.loading = false
-                    self.error = error.localizedDescription
+                    self.error = "Non riesco ad aprire \(url.lastPathComponent): \(error.localizedDescription)"
                     self.title = "Errore: " + (url.lastPathComponent)
+                    self.url = nil
                 }
             }
         }
+    }
+
+    /// Ricollega lettore → tono/tempo → EQ → volume con il formato del file (mono/stereo, qualunque frequenza).
+    private func connect(format: AVAudioFormat) {
+        let e = AudioHub.shared.engine
+        nodes.player.stop()
+        e.disconnectNodeOutput(nodes.player)
+        e.disconnectNodeOutput(nodes.timePitch)
+        e.disconnectNodeOutput(nodes.eq)
+        e.connect(nodes.player, to: nodes.timePitch, format: format)
+        e.connect(nodes.timePitch, to: nodes.eq, format: format)
+        e.connect(nodes.eq, to: nodes.volume, fromBus: 0, toBus: 0, format: format)
     }
 
     func updatePosition() {
         guard let f = file else { return }
         let sr = f.processingFormat.sampleRate
         if isPlaying, let nt = nodes.player.lastRenderTime, let pt = nodes.player.playerTime(forNodeTime: nt) {
-            position = min(duration, Double(startFrame) / sr + Double(pt.sampleTime) / pt.sampleRate)
+            position = min(duration, max(Double(startFrame) / sr, Double(startFrame) / sr + Double(pt.sampleTime) / pt.sampleRate))
         }
     }
 
-    func play() {
+    var rate: Double { 1 + pitchPercent / 100 }
+
+    /// Prossimo "uno" di battuta (secondi nel file) dopo `t`; se l'analisi non ha battute, nil.
+    func nextDownbeat(after t: Double) -> Double? {
+        guard beats.count > 8 else { return nil }
+        if let i = beats.indices.first(where: { beats[$0] > t && ($0 - downbeatOffset) % 4 == 0 }) { return beats[i] }
+        return beats.first { $0 > t }
+    }
+
+    /// Primo "uno" di battuta dopo l'attacco del brano (punto di ingresso nel mix).
+    var firstDownbeat: Double {
+        guard beats.count > 8 else { return max(0, leadIn - 0.02) }
+        let i = beats.indices.first { beats[$0] >= leadIn - 0.08 && ($0 - downbeatOffset) % 4 == 0 } ?? 0
+        return beats[i]
+    }
+
+    /// Partenza a un istante preciso (per far coincidere le battute dei due deck).
+    func play(after delay: Double) {
+        guard delay > 0.01 else { play(); return }
+        let host = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: delay)
+        play(at: AVAudioTime(hostTime: host))
+    }
+
+    func play() { play(at: nil) }
+
+    func play(at when: AVAudioTime?) {
         guard let f = file, !isPlaying else { return }
         AudioHub.shared.start()
         let remaining = AVAudioFrameCount(max(0, f.length - startFrame))
@@ -132,7 +179,7 @@ final class Deck: ObservableObject, Identifiable {
                 self.onEnd?()
             }
         }
-        nodes.player.play()
+        nodes.player.play(at: when)
         isPlaying = true
     }
 

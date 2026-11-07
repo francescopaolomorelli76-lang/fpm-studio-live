@@ -12,7 +12,7 @@ struct FeatureStatus: Identifiable {
     var note: String
 
     static let all: [FeatureStatus] = [
-        .init(id: "REQ-A01", area: "Player", title: "MIDI/KAR, MP3/WAV/M4A, MP4/MOV, LRC", state: .limited, note: "Mancano CDG, AVI/FLV, WMA e link YouTube"),
+        .init(id: "REQ-A01", area: "Player", title: "MIDI/KAR, MP3/WAV/M4A, MP4/MOV, MP3+G (CDG e ZIP), LRC/SRT/TXT, testi ID3", state: .limited, note: "Mancano AVI/FLV, WMA e link YouTube"),
         .init(id: "REQ-A02", area: "Player", title: "File picker, drag & drop, cartelle, archivio", state: .done, note: ""),
         .init(id: "REQ-A03", area: "Player", title: "Transport, tempo trascorso/rimanente, BPM, tonalità, pre-count, metronomo", state: .limited, note: "Metronomo e pre-count solo sulle basi MIDI"),
         .init(id: "REQ-A04", area: "Player", title: "Tono, tempo indipendente, volumi, mute/solo, EQ, compressore", state: .limited, note: "Compressore solo nell'export"),

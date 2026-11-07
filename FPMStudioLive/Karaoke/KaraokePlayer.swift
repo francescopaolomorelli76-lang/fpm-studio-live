@@ -16,6 +16,8 @@ struct ChannelStrip: Identifiable, Hashable {
 /// Posizione di riproduzione, separata per non ridisegnare tutta la finestra 30 volte al secondo.
 final class PlaybackClock: ObservableObject {
     @Published var position: Double = 0
+    /// Fotogramma CD+G corrente (aggiornato solo quando cambia).
+    @Published var cdgImage: CGImage?
 }
 
 /// Lettore karaoke: basi MIDI/KAR (SoundFont), MP3 e video, con testo, accordi, tono, tempo e mixer.
@@ -40,6 +42,8 @@ final class KaraokePlayer: ObservableObject {
     @Published private(set) var videoPlayer: AVPlayer?
     @Published private(set) var midi: MIDIFile?
     @Published private(set) var melodyChannel: Int?
+    @Published private(set) var cdg: CDGDecoder?
+    @Published private(set) var lyricsSource = ""
 
     // Funzioni avanzate: marker, loop, eventi, leggio, metronomo, volume brano.
     @Published var markers: [SongMarker] = []
@@ -95,6 +99,7 @@ final class KaraokePlayer: ObservableObject {
         status = ""
         lyrics = KaraokeLyrics(); chords = []; sections = []; channels = []; keyName = ""; bpm = nil
         videoPlayer = nil; midi = nil; melodyChannel = nil
+        cdg = nil; clock.cdgImage = nil; lyricsSource = ""
         let sidecar = SongSidecar.load(for: item.url)
         loadAdvanced(sidecar, for: item.url)
         lyricsOffset = sidecar?.lyricsOffset ?? 0
@@ -106,7 +111,12 @@ final class KaraokePlayer: ObservableObject {
                 hub.sequencer.load(m)
                 duration = m.duration
                 bpm = m.mainBPM
-                lyrics = sidecar?.lyrics ?? m.karaokeLyrics()
+                if let l = sidecar?.lyrics, !l.isEmpty { lyrics = l; lyricsSource = "testo salvato in FPM Studio Live" }
+                else {
+                    lyrics = m.karaokeLyrics()
+                    lyricsSource = lyrics.isEmpty ? "" : "testo del file MIDI/KAR"
+                    if lyrics.isEmpty, let f = LyricsSources.find(for: item.url) { lyrics = f.lyrics; lyricsSource = f.source }
+                }
                 if lyrics.title == nil { lyrics.title = item.title }
                 let an = ChordEngine.analyze(m, lyrics: lyrics, melodyOverride: sidecar?.melodyChannel)
                 melodyChannel = an.melodyChannel
@@ -122,6 +132,11 @@ final class KaraokePlayer: ObservableObject {
                     return ChannelStrip(channel: ch, name: name, program: prog, isMelody: ch == an.melodyChannel)
                 }
             case .audio, .video:
+                let media = try (item.kind == .video ? MediaResolver.Media(audio: item.url, cdg: nil) : MediaResolver.resolve(item.url))
+                if let c = media.cdg, let d = try? Data(contentsOf: c) {
+                    cdg = CDGDecoder(data: d)
+                    clock.cdgImage = nil
+                }
                 if item.kind == .video {
                     let p = AVPlayer(url: item.url)
                     videoPlayer = p
@@ -135,13 +150,23 @@ final class KaraokePlayer: ObservableObject {
                     }
                     duration = videoUsesOwnAudio ? (p.currentItem?.asset.duration.seconds ?? 0) : fileAudio.duration
                 } else {
-                    try fileAudio.load(item.url)
+                    try fileAudio.load(media.audio)
                     duration = fileAudio.duration
                 }
-                lyrics = sidecar?.lyrics ?? loadLRC(for: item.url) ?? KaraokeLyrics(title: item.title, artist: item.artist, lines: [])
+                if let l = sidecar?.lyrics, !l.isEmpty {
+                    lyrics = l; lyricsSource = "testo salvato in FPM Studio Live"
+                } else if let f = LyricsSources.find(for: media.audio) ?? (media.audio != item.url ? LyricsSources.find(for: item.url) : nil) {
+                    lyrics = f.lyrics; lyricsSource = f.source
+                } else if let l = Self.embeddedAssetLyrics(item.url) {
+                    lyrics = l; lyricsSource = "testo nei metadati del file (da sincronizzare)"
+                } else {
+                    lyrics = KaraokeLyrics(title: item.title, artist: item.artist, lines: [])
+                    lyricsSource = cdg != nil ? "grafica CDG" : ""
+                }
+                if lyrics.title == nil { lyrics.title = item.title }
                 chords = sidecar?.chords ?? lyrics.chordEvents
                 sections = sidecar?.sections ?? []
-                if chords.isEmpty || sections.isEmpty { analyzeAudio(item.url, keepChords: !chords.isEmpty) }
+                if chords.isEmpty || sections.isEmpty { analyzeAudio(media.audio, keepChords: !chords.isEmpty) }
             }
         } catch {
             status = "Impossibile aprire il brano: \(error.localizedDescription)"
@@ -149,6 +174,16 @@ final class KaraokePlayer: ObservableObject {
         }
         transpose = sidecar?.defaultTranspose ?? 0
         tempo = sidecar?.defaultTempo ?? 1
+        if status.isEmpty {
+            let n = lyrics.flat.count
+            if !lyrics.isEmpty {
+                status = "Testo: \(lyricsSource) · \(lyrics.lines.count) righe, \(n) sillabe" + (lyrics.isFullySynced ? "" : " · non sincronizzato: usa \"Testo e accordi → Sincronizza\"")
+            } else if cdg != nil {
+                status = "Karaoke CD+G: il testo è nella grafica"
+            } else {
+                status = "Nessun testo trovato in questo brano: aggiungilo con \"Testo e accordi\""
+            }
+        }
         nextUpTitle = library?.setlist.first(where: { $0 != item })?.title
         if autoplay { play() }
     }
@@ -163,11 +198,12 @@ final class KaraokePlayer: ObservableObject {
     private func analyzeAudio(_ url: URL, keepChords: Bool) {
         analyzing = true
         let lyr = lyrics
+        let current = item?.url
         DispatchQueue.global(qos: .utility).async {
             let r = try? AudioAnalyzer.analyze(url: url)
             DispatchQueue.main.async {
                 self.analyzing = false
-                guard let r = r, self.item?.url == url else { return }
+                guard let r = r, self.item?.url == current else { return }
                 self.bpm = r.bpm
                 self.keyName = KeyDetector.name(root: r.keyRoot, minor: r.keyMinor, notation: self.settings.notation)
                 if !keepChords { self.chords = r.chords }
@@ -244,7 +280,7 @@ final class KaraokePlayer: ObservableObject {
 
     private func tick() {
         guard let k = kind else { return }
-        defer { advancedTick() }
+        defer { advancedTick(); updateCDG() }
         switch k {
         case .midi: position = hub.sequencer.position
         case .audio: position = fileAudio.position
@@ -263,6 +299,30 @@ final class KaraokePlayer: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: CD+G
+
+    private func updateCDG() {
+        guard let c = cdg else { return }
+        c.advance(to: position)
+        guard c.changed || clock.cdgImage == nil else { return }
+        let rgba = c.visibleRGBA()
+        let w = CDGDecoder.visibleWidth, h = CDGDecoder.visibleHeight
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData) else { return }
+        clock.cdgImage = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
+                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+    }
+
+    /// Testo nei metadati di M4A/MP4 (iTunes "©lyr"), anche in formato LRC.
+    static func embeddedAssetLyrics(_ url: URL) -> KaraokeLyrics? {
+        guard let text = AVURLAsset(url: url).lyrics, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        if text.range(of: #"\[\d{1,2}:\d{2}"#, options: .regularExpression) != nil {
+            let l = KaraokeLyrics.fromLRC(text)
+            if !l.isEmpty { return l }
+        }
+        return LyricsSources.unsynced(text)
     }
 
     // MARK: Mixer MIDI

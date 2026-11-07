@@ -24,19 +24,24 @@ struct DJView: View {
     private var centerColumn: some View {
         Panel(title: "Mix", icon: "dial.medium") {
             VStack(spacing: 14) {
-                Button(action: { dj.automix.toggle() }) {
+                Button(action: { dj.mixNow() }) {
                     VStack(spacing: 4) {
-                        Image(systemName: dj.automix ? "wand.and.stars" : "wand.and.rays").font(.system(size: 28))
-                        Text(dj.automix ? "AUTOMIX ON" : "AUTOMIX").font(.system(size: 13, weight: .heavy))
-                    }.frame(maxWidth: .infinity, minHeight: 80)
+                        Image(systemName: "arrow.left.arrow.right.circle.fill").font(.system(size: 30))
+                        Text("MIX").font(.system(size: 16, weight: .heavy))
+                        Text("passa al brano in attesa").font(.system(size: 9))
+                    }.frame(maxWidth: .infinity, minHeight: 86)
+                }.buttonStyle(NeonButtonStyle())
+                .help("Miscela il brano che suona con quello in attesa sull'altro deck")
+                Button(action: { dj.automix.toggle() }) {
+                    Label(dj.automix ? "AUTOMIX ON" : "AUTOMIX", systemImage: dj.automix ? "wand.and.stars" : "wand.and.rays")
+                        .frame(maxWidth: .infinity)
                 }.buttonStyle(NeonButtonStyle(prominent: dj.automix))
-                Button(action: { dj.mixNow() }) { Label("Mixa ora", systemImage: "arrow.left.arrow.right").frame(maxWidth: .infinity) }
-                    .buttonStyle(NeonButtonStyle(prominent: false))
+                .help("A fine brano mixa da solo con il successivo della playlist")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Dissolvenza \(Int(dj.crossfadeSeconds)) s").font(.caption).foregroundColor(Theme.soft)
                     Slider(value: Binding(get: { dj.crossfadeSeconds }, set: { dj.crossfadeSeconds = $0; settings.crossfadeSeconds = $0 }), in: 2...20, step: 1)
                 }
-                Toggle("Allinea BPM", isOn: $dj.syncTempo).toggleStyle(.switch).font(.caption)
+                Toggle("Allinea BPM e battuta", isOn: $dj.syncTempo).toggleStyle(.switch).font(.caption)
                 Text(dj.status).font(.caption).foregroundColor(Theme.cyan).multilineTextAlignment(.center).frame(minHeight: 30)
                 Spacer(minLength: 0)
                 Text("CROSSFADER").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.soft)

@@ -63,7 +63,8 @@ final class DJController: ObservableObject {
                 next.load(playlist[nextIndex], soundBank: soundBank())
             }
         }
-        if active.remaining <= crossfadeSeconds && !next.loading && next.url != nil && !next.isPlaying {
+        // Inizio un po' prima per avere il tempo di aspettare il primo tempo della battuta.
+        if active.remaining <= crossfadeSeconds + (syncTempo ? 2.5 : 0) && !next.loading && next.url != nil && !next.isPlaying {
             startTransition(from: active, to: next)
         }
     }
@@ -87,45 +88,84 @@ final class DJController: ObservableObject {
         }
     }
 
-    /// Passa subito al brano successivo (pulsante "Mixa ora").
+    /// Pulsante MIX: dal brano che suona a quello in attesa sull'altro deck.
+    /// Se l'altro deck è vuoto carica il prossimo della playlist; se non suona niente, fa partire il deck pronto.
     func mixNow() {
-        guard let active = activeDeck else { automix = true; return }
+        guard let active = activeDeck else {
+            if let ready = [deckA, deckB].first(where: { $0.url != nil && !$0.loading }) {
+                crossfader = ready === deckA ? -1 : 1
+                ready.play()
+                status = "In onda: \(ready.title)"
+            } else if !playlist.isEmpty {
+                automix = true
+            } else {
+                status = "Carica un brano in un deck o nella playlist"
+            }
+            return
+        }
         let next = other(active)
-        if next.url == nil || next.isPlaying, nextIndex < playlist.count {
+        if next.loading { status = "Attendi: sto preparando \(next.title)…"; return }
+        if next.url == nil || next.isPlaying {
+            guard nextIndex < playlist.count else { status = "Nessun brano in attesa: caricane uno nell'altro deck"; return }
+            status = "Preparo \(playlist[nextIndex].deletingPathExtension().lastPathComponent)…"
             next.load(playlist[nextIndex], soundBank: soundBank()) { [weak self] in self?.startTransition(from: active, to: next) }
         } else {
             startTransition(from: active, to: next)
         }
     }
 
+    /// Mix: se "Allinea BPM e battuta" è attivo, il brano in attesa prende il tempo di quello che suona
+    /// e parte esattamente sul prossimo "uno" di battuta; poi parte la dissolvenza.
     private func startTransition(from a: Deck, to b: Deck) {
-        guard !fading else { return }
+        guard !fading, b.url != nil else { return }
         fading = true
-        if syncTempo { b.sync(to: a) }
-        b.seek(to: max(0, b.leadIn - 0.02))
-        b.play()
+        var delay = 0.0
+        let entry = b.firstDownbeat
+        if syncTempo {
+            b.sync(to: a)
+            a.updatePosition()
+            if let beat = a.nextDownbeat(after: a.position + 0.25) {
+                delay = max(0, (beat - a.position) / a.rate)
+                if delay > 6 { delay = 0 }   // analisi incerta: niente attese lunghe
+            }
+        }
+        b.seek(to: entry)
+        b.play(after: delay)
         if let u = b.url, let i = playlist.firstIndex(of: u) { nextIndex = i + 1 }
-        status = "Mix: \(a.title) → \(b.title)"
+        status = "Mix: \(a.title) → \(b.title)" + (syncTempo && b.bpm != nil ? " · a tempo (\(Int((b.effectiveBPM ?? 0).rounded())) BPM)" : "")
         let target: Double = b === deckA ? -1 : 1
         let startX = crossfader
         let steps = max(1, Int(crossfadeSeconds * 20))
         var k = 0
-        Timer.scheduledTimer(withTimeInterval: crossfadeSeconds / Double(steps), repeats: true) { [weak self] t in
-            guard let self = self else { t.invalidate(); return }
-            k += 1
-            let f = Double(k) / Double(steps)
-            // Curva morbida (smoothstep).
-            let s = f * f * (3 - 2 * f)
-            self.crossfader = startX + (target - startX) * s
-            // Il tempo del brano in entrata torna gradualmente all'originale.
-            if self.syncTempo { b.pitchPercent *= 0.985 }
-            if k >= steps {
-                t.invalidate()
-                a.unload()
-                if self.syncTempo { b.pitchPercent = 0 }
-                self.fading = false
-                self.status = self.automix ? "Automix attivo" : "Pronto"
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            Timer.scheduledTimer(withTimeInterval: self.crossfadeSeconds / Double(steps), repeats: true) { [weak self] t in
+                guard let self = self else { t.invalidate(); return }
+                k += 1
+                let f = Double(k) / Double(steps)
+                // Curva morbida (smoothstep): il tempo resta allineato per tutta la dissolvenza.
+                let s = f * f * (3 - 2 * f)
+                self.crossfader = startX + (target - startX) * s
+                if k >= steps {
+                    t.invalidate()
+                    a.unload()
+                    self.fading = false
+                    self.status = self.automix ? "Automix attivo" : "In onda: \(b.title)"
+                    self.returnToOriginalTempo(b)
+                }
             }
+        }
+    }
+
+    /// Finito il mix, il brano torna piano piano (15 s) al suo tempo originale.
+    private func returnToOriginalTempo(_ d: Deck) {
+        guard abs(d.pitchPercent) > 0.05 else { return }
+        let start = d.pitchPercent
+        var k = 0
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { t in
+            k += 1
+            d.pitchPercent = start * (1 - Double(k) / 150)
+            if k >= 150 || !d.isPlaying { t.invalidate(); if d.isPlaying { d.pitchPercent = 0 } }
         }
     }
 

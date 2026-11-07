@@ -5,7 +5,7 @@ Regola seguita: nessuna funzione fittizia; ciò che manca è dichiarato anche ne
 
 | ID | Area | Requisito | Stato | Note |
 |---|---|---|---|---|
-| REQ-A01 | Player | MIDI/KAR, MP3/WAV/M4A, MP4/MOV, LRC | 🟡 Limitata | Mancano CDG, AVI/FLV, WMA e link YouTube |
+| REQ-A01 | Player | MIDI/KAR, MP3/WAV/M4A, MP4/MOV, MP3+G (CDG e ZIP), LRC/SRT/TXT, testi ID3 | 🟡 Limitata | Mancano AVI/FLV, WMA e link YouTube |
 | REQ-A02 | Player | File picker, drag & drop, cartelle, archivio | ✅ Implementata |  |
 | REQ-A03 | Player | Transport, tempo trascorso/rimanente, BPM, tonalità, pre-count, metronomo | 🟡 Limitata | Metronomo e pre-count solo sulle basi MIDI |
 | REQ-A04 | Player | Tono, tempo indipendente, volumi, mute/solo, EQ, compressore | 🟡 Limitata | Compressore solo nell'export |

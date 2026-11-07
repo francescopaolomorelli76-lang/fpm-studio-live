@@ -54,20 +54,26 @@ enum ChordEngine {
             }
             return set
         }
-        var harmony = harmonySet(strict: true)
-        var fallback = false
-        if harmony.isEmpty { harmony = harmonySet(strict: false); fallback = true }
-        if harmony.isEmpty {
-            harmony = Set(byCh.keys.filter { $0 != 9 && !bass.contains($0) && $0 != melody })
-            fallback = true
+        // Tutte le tracce di accompagnamento contribuiscono, con pesi diversi:
+        // organi/archi/pad (tappeti) > altre tracce polifoniche (piano, chitarre, tastiere) > linee singole e arpeggi > melodia.
+        let strictSet = harmonySet(strict: true)
+        let polySet = harmonySet(strict: false)
+        var channelWeight: [Int: Double] = [:]
+        for (ch, _) in byCh where ch != 9 && !bass.contains(ch) {
+            let prog = midi.programs[ch] ?? 0
+            if ch == melody { channelWeight[ch] = 0.15 }
+            else if strictSet.contains(ch) { channelWeight[ch] = isPadLike(prog) ? 2.1 : 1.3 }
+            else if polySet.contains(ch) { channelWeight[ch] = 1.0 }
+            else { channelWeight[ch] = 0.5 }
         }
+        let fallback = strictSet.isEmpty
+        let harmony = Set(channelWeight.keys.filter { $0 != melody })
 
         let beat = midi.ticksPerBeat
         let quantum = max(1, beat)
         var boundaries: [(t: Int, pc: Int, w: Double, bass: Bool, delta: Double)] = []
-        for n in notes where harmony.contains(n.channel) {
-            let prog = midi.programs[n.channel] ?? 0
-            let w = (0.6 + Double(n.velocity) / 127) * (isPadLike(prog) ? 2.1 : 1)
+        for n in notes where channelWeight[n.channel] != nil {
+            let w = (0.6 + Double(n.velocity) / 127) * (channelWeight[n.channel] ?? 0)
             boundaries.append((n.startTick, n.pitch % 12, w, false, 1))
             boundaries.append((n.endTick, n.pitch % 12, w, false, -1))
         }
@@ -82,7 +88,7 @@ enum ChordEngine {
         var activeH = [Double](repeating: 0, count: 12), activeB = [Double](repeating: 0, count: 12)
         var bi = 0
         var prev: Chord?
-        let threshold = fallback ? 0.56 : 0.64
+        let threshold = 0.55
         var t = 0
         while t < midi.endTick {
             let to = min(midi.endTick, t + quantum)
@@ -166,6 +172,24 @@ enum ChordEngine {
                 regions[i].chord = c
             }
         }
+
+        // Copertura completa: dentro il brano (dalla prima all'ultima nota, batteria compresa)
+        // un tratto senza accordo riconosciuto tiene l'accordo precedente (o il successivo all'inizio).
+        let musicStart = notes.map { $0.startTick }.min() ?? 0
+        let musicEnd = notes.map { $0.endTick }.max() ?? midi.endTick
+        var lastChord: Chord?
+        for i in regions.indices {
+            if let c = regions[i].chord { lastChord = c; continue }
+            guard regions[i].endTick > musicStart && regions[i].startTick < musicEnd else { continue }
+            regions[i].chord = lastChord ?? regions[(i + 1)...].first(where: { $0.chord != nil })?.chord
+        }
+        var merged: [ChordRegion] = []
+        for r in regions {
+            if var last = merged.last, last.chord == r.chord, last.endTick == r.startTick {
+                last.endTick = r.endTick; merged[merged.count - 1] = last
+            } else { merged.append(r) }
+        }
+        regions = merged
 
         // Tonalità dalle durate di tutte le note non di batteria.
         var pc = [Double](repeating: 0, count: 12)

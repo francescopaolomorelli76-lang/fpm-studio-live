@@ -265,48 +265,89 @@ final class MIDIFile {
     // MARK: - Testi karaoke
 
     /// Estrae i testi da eventi Lyric (FF05) o Text (FF01, formato .kar).
+    /// Sceglie automaticamente la traccia con più sillabe (ignora titoli, copyright e note varie)
+    /// e riconosce gli a capo in tutte le forme usate: "/", "\\", "\r", "\n" all'inizio o alla fine.
     func karaokeLyrics() -> KaraokeLyrics {
-        var textEvents: [(Int, String)] = []
-        var lyricEvents: [(Int, String)] = []
+        var groups: [String: [(Int, String)]] = [:]
         var karHeaders: [String] = []
         for e in events {
-            guard case .meta(let type, let data) = e.kind else { continue }
+            guard case .meta(let type, let data) = e.kind, type == 0x01 || type == 0x05 else { continue }
             let s = TextDecoding.decode(data)
-            if type == 0x01 {
-                if s.hasPrefix("@") { karHeaders.append(s); continue }
-                textEvents.append((e.tick, s))
-            } else if type == 0x05 {
-                lyricEvents.append((e.tick, s))
-            }
+            if type == 0x01 && s.hasPrefix("@") { karHeaders.append(s); continue }
+            groups["\(type)-\(e.track)", default: []].append((e.tick, s))
         }
-        let isKar = !karHeaders.isEmpty || textEvents.contains { $0.1.hasPrefix("/") || $0.1.hasPrefix("\\") }
-        let source = (isKar && textEvents.count > 10) || lyricEvents.count < 5 ? textEvents : lyricEvents
         var lyrics = KaraokeLyrics()
         for h in karHeaders where h.hasPrefix("@T") {
             let v = String(h.dropFirst(2)).trimmingCharacters(in: .whitespaces)
             if lyrics.title == nil { lyrics.title = v } else if lyrics.artist == nil { lyrics.artist = v }
         }
-        guard source.count >= 5 else { return lyrics }
+        // Punteggio: numero di eventi in istanti diversi (dopo l'inizio), preferendo i Lyric (FF05) a parità.
+        func score(_ k: String, _ g: [(Int, String)]) -> Double {
+            let distinct = Set(g.filter { $0.0 > 0 }.map { $0.0 }).count
+            let breaks = g.filter { $0.1.hasPrefix("/") || $0.1.hasPrefix("\\") || $0.1.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }.count
+            return Double(distinct) + Double(min(breaks, 20)) * 0.5 + (k.hasPrefix("5-") ? 2 : 0)
+        }
+        guard let best = groups.max(by: { score($0.key, $0.value) < score($1.key, $1.value) }), best.value.count >= 3 else { return lyrics }
+        let source = best.value   // già in ordine di tempo (ordinamento stabile del parser)
+
         var line = LyricLine()
         func flush(paragraph: Bool) {
             if !line.syllables.isEmpty { lyrics.lines.append(line) }
             line = LyricLine()
             if paragraph, !lyrics.lines.isEmpty { lyrics.lines[lyrics.lines.count - 1].endsParagraph = true }
         }
+        var hadBreaks = false
         for (tick, raw) in source {
-            var s = raw
             let t = seconds(atTick: tick)
-            if s.hasPrefix("\\") { flush(paragraph: true); s.removeFirst() }
-            else if s.hasPrefix("/") { flush(paragraph: false); s.removeFirst() }
-            var breakAfter = false, paraAfter = false
-            if s.hasSuffix("\r\n") || s.hasSuffix("\n\n") { paraAfter = true }
-            if s.hasSuffix("\r") || s.hasSuffix("\n") { breakAfter = true }
-            s = s.replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n", with: "")
-            if !s.isEmpty { line.syllables.append(LyricSyllable(text: s, time: t)) }
-            if breakAfter || paraAfter { flush(paragraph: paraAfter) }
+            // Lavoro sugli scalari Unicode: "\r\n" in Swift è un unico carattere.
+            var u = Array(raw.unicodeScalars)
+            var leadingBreaks = 0, leadingPara = false
+            while let f = u.first, f == "\r" || f == "\n" || f == "/" || f == "\\" {
+                if f == "\\" { leadingPara = true }
+                if f == "\n" || f == "/" || f == "\\" { leadingBreaks += 1 } else if u.count > 1 && u[1] == "\n" { } else { leadingBreaks += 1 }
+                u.removeFirst()
+            }
+            var trailingBreaks = 0
+            while let l = u.last, l == "\r" || l == "\n" {
+                if l == "\n" || !(trailingBreaks > 0) { trailingBreaks += 1 }
+                u.removeLast()
+            }
+            if leadingBreaks > 0 { hadBreaks = true; flush(paragraph: leadingPara || leadingBreaks >= 2) }
+            var text = String(String.UnicodeScalarView(u.filter { $0.value >= 32 || $0 == "\t" }))
+            text = text.replacingOccurrences(of: "\t", with: " ")
+            // Righe intere in un solo evento (alcuni file): spezzo agli a capo interni.
+            let pieces = text.components(separatedBy: CharacterSet(charactersIn: "\r\n"))
+            for (i, piece) in pieces.enumerated() {
+                if i > 0 { hadBreaks = true; flush(paragraph: false) }
+                if !piece.isEmpty { line.syllables.append(LyricSyllable(text: piece, time: t)) }
+            }
+            if trailingBreaks > 0 { hadBreaks = true; flush(paragraph: trailingBreaks >= 2) }
         }
         flush(paragraph: false)
+        // Nessun a capo nel file, o righe troppo lunghe: divido alle pause e a ~42 caratteri.
+        lyrics.lines = lyrics.lines.flatMap { KaraokeLyrics.splitLongLine($0, forceByPauses: !hadBreaks) }
         return lyrics
+    }
+}
+
+extension KaraokeLyrics {
+    /// Divide una riga troppo lunga per lo schermo: alle pause di canto (>0,9 s) o al confine di parola.
+    static func splitLongLine(_ line: LyricLine, forceByPauses: Bool, maxChars: Int = 42) -> [LyricLine] {
+        guard line.text.count > maxChars || (forceByPauses && line.syllables.count > 6) else { return [line] }
+        var out: [LyricLine] = []
+        var cur = LyricLine()
+        var len = 0
+        for (i, s) in line.syllables.enumerated() {
+            let gap = i > 0 && s.time >= 0 && line.syllables[i - 1].time >= 0 ? s.time - line.syllables[i - 1].time : 0
+            let wordStart = i == 0 || line.syllables[i - 1].text.hasSuffix(" ") || s.text.hasPrefix(" ")
+            if !cur.syllables.isEmpty && wordStart && (gap > 0.9 || len + s.text.count > maxChars) {
+                out.append(cur); cur = LyricLine(); len = 0
+            }
+            cur.syllables.append(s)
+            len += s.text.count
+        }
+        if !cur.syllables.isEmpty { cur.endsParagraph = line.endsParagraph; out.append(cur) }
+        return out
     }
 }
 

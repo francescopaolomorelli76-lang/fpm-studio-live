@@ -14,7 +14,20 @@ enum PianoStyle: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum AccompanimentMode: String, CaseIterable, Identifiable, Codable {
+    case pianoFromChords, originalWithoutMelody, originalPlusPiano
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .pianoFromChords: return "Pianoforte dagli accordi (piano e voce)"
+        case .originalWithoutMelody: return "Base originale completa senza melodia"
+        case .originalPlusPiano: return "Base originale senza melodia + pianoforte"
+        }
+    }
+}
+
 struct PianoOptions: Codable, Equatable {
+    var mode: AccompanimentMode = .pianoFromChords
     var style: PianoStyle = .automatic
     var program: Int = 0                // 0 Gran coda, 1 Brillante, 4 Rhodes
     var simplifyToTriads: Bool = false
@@ -41,7 +54,14 @@ struct PianoArranger {
     let options: PianoOptions
     let bassChannels: Set<Int>
 
-    static let pianoChannel = 0
+    var melodyChannel: Int? = nil
+
+    /// Canale del pianoforte generato: libero rispetto alle tracce originali conservate.
+    var pianoChannel: Int {
+        guard options.mode == .originalPlusPiano else { return 0 }
+        let used = Set(midi.events.compactMap { $0.channel }).subtracting(melodyChannel.map { [$0] } ?? [])
+        return (0..<16).first { $0 != 9 && !used.contains($0) } ?? melodyChannel ?? 15
+    }
 
     private struct Rand {
         var state: UInt64
@@ -55,13 +75,23 @@ struct PianoArranger {
     func arrange() -> Data {
         var w = MIDIWriter(ppq: midi.ppq)
         var conductor = midi.conductorEvents()
-        if options.finalRitardando { conductor += ritardando() }
+        if options.finalRitardando && options.mode == .pianoFromChords { conductor += ritardando() }
         w.addTrack("FPM Studio Live - Tempo", conductor)
+        if options.mode != .pianoFromChords {
+            // Tutte le tracce originali, dall'inizio alla fine, tranne la melodia.
+            let keep = Set(midi.events.compactMap { $0.channel }).subtracting(melodyChannel.map { [$0] } ?? [])
+            for ch in keep.sorted() {
+                let name = ch == 9 ? "Batteria" : GMNames.name(midi.programs[ch] ?? 0)
+                w.addTrack("\(name) (originale)", midi.channelEvents([ch]))
+            }
+            if options.mode == .originalPlusPiano { w.addTrack("Pianoforte - accompagnamento", pianoEvents()) }
+            return w.data()
+        }
         w.addTrack("Pianoforte - accompagnamento", pianoEvents())
         if options.keepOriginalBass && !bassChannels.isEmpty {
             // Il basso va su un canale libero diverso dal piano.
             var remap: [Int: Int] = [:]
-            for b in bassChannels { remap[b] = b == PianoArranger.pianoChannel ? 1 : b }
+            for b in bassChannels { remap[b] = b == pianoChannel ? 1 : b }
             w.addTrack("Basso originale", midi.channelEvents(bassChannels, remapTo: remap))
         }
         if options.keepOriginalDrums && midi.usedChannels.contains(9) {
@@ -103,7 +133,7 @@ struct PianoArranger {
     }
 
     private func pianoEvents() -> [MIDIWriter.TrackEvent] {
-        let ch = UInt8(PianoArranger.pianoChannel)
+        let ch = UInt8(pianoChannel)
         var ev: [MIDIWriter.TrackEvent] = [
             .init(tick: 0, bytes: [0xB0 | ch, 0, 0]),
             .init(tick: 0, bytes: [0xB0 | ch, 32, 0]),
@@ -321,4 +351,11 @@ struct PianoArranger {
 
 extension Comparable {
     func clamped(_ lo: Self, _ hi: Self) -> Self { min(max(self, lo), hi) }
+}
+
+/// Nomi brevi degli strumenti per le tracce esportate (indipendente dall'interfaccia).
+enum GMNames {
+    static let families = ["Pianoforte", "Percussioni cromatiche", "Organo", "Chitarra", "Basso", "Archi", "Ensemble", "Ottoni",
+                           "Ance", "Flauti", "Synth lead", "Synth pad", "Synth FX", "Etnici", "Percussioni", "Effetti"]
+    static func name(_ program: Int) -> String { families[max(0, min(15, program / 8))] }
 }
