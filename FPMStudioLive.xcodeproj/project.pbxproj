@@ -1,0 +1,309 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		48290134E5BBA6453CE71005 /* AIStudio.swift */ = {isa = PBXBuildFile; fileRef = D809DF305EB104671D6DBE93; };
+		9E6DD4DB5134B48B43C9C951 /* AppSettings.swift */ = {isa = PBXBuildFile; fileRef = 7A86BC60F559A58775C9390A; };
+		8F8C2DBDCFC8315FCCC5106F /* FPMStudioLiveApp.swift */ = {isa = PBXBuildFile; fileRef = B8DD9995155F1913BFF68302; };
+		40C628A595D2A024DEB8F5E7 /* Theme.swift */ = {isa = PBXBuildFile; fileRef = 5F825F35AF554CA25096CDA7; };
+		AB6549643CA9631546CEE298 /* AudioAnalyzer.swift */ = {isa = PBXBuildFile; fileRef = D4C55496D3DA09C5B5DC57E8; };
+		30E1537C3BCEE0188F39D01F /* AudioFilePlayer.swift */ = {isa = PBXBuildFile; fileRef = 983EBA12780DCECBF06626E7; };
+		AEC968B1177195F5D06A5452 /* AudioHub.swift */ = {isa = PBXBuildFile; fileRef = 59145A76EEF30D6BA4EB61D0; };
+		6C08D5C60B3F5DD3A8AD7A8E /* MIDISequencer.swift */ = {isa = PBXBuildFile; fileRef = A822F6FAB73AD1E214515891; };
+		08CA720700C8558C03A832AB /* Mastering.swift */ = {isa = PBXBuildFile; fileRef = 8F140C130442484862EF5EFC; };
+		8A941AB3D2D76464E4B8B621 /* MicEngine.swift */ = {isa = PBXBuildFile; fileRef = D0E456BA6FA68C3660ED236C; };
+		2F62514B110669242B7FFD0E /* OfflineRenderer.swift */ = {isa = PBXBuildFile; fileRef = E0A636DBFC3F223E732D4DFD; };
+		304AF6FF922E55EC92BE272C /* Chord.swift */ = {isa = PBXBuildFile; fileRef = 586C48A1E73175CB24E1C4F1; };
+		4CA8CAFB49BEAFFE7167493E /* ChordEngine.swift */ = {isa = PBXBuildFile; fileRef = A6B2A5332B811656C786B90F; };
+		4E3E10CABF8E8C4BE16EB1DE /* Lyrics.swift */ = {isa = PBXBuildFile; fileRef = 307C5EC30768D401BF74343A; };
+		70EA68AE2EF73406DFF4C18F /* MIDIFile.swift */ = {isa = PBXBuildFile; fileRef = 9C8CC3753B3D54BF89B4EF84; };
+		079FB16B8F0343D8CED60F9F /* MIDIWriter.swift */ = {isa = PBXBuildFile; fileRef = 4E8C0B0F57E93C50864F5650; };
+		BF510B445E2793ACDA7FAD1F /* PianoArranger.swift */ = {isa = PBXBuildFile; fileRef = A4BE38F1B29E4C2C0E193EBD; };
+		20346EBEEA040F31B5455B01 /* SongGenerator.swift */ = {isa = PBXBuildFile; fileRef = 441AB21DAB3279DA563F7A30; };
+		FB36361C06063B35477BD57F /* SongStructure.swift */ = {isa = PBXBuildFile; fileRef = D2D0517CAA37A3AA185ECA6F; };
+		84C13AFEA160D4E0A33ADECD /* DJController.swift */ = {isa = PBXBuildFile; fileRef = 24CB3C2EB7B2F7D2272C4C58; };
+		2B53ABC965C72CF6977D59FF /* DJView.swift */ = {isa = PBXBuildFile; fileRef = DA205542BF0CFE22FED80B38; };
+		1EC1CBA1A062BE26D7951B5E /* Deck.swift */ = {isa = PBXBuildFile; fileRef = 592D1037FE8DD7227FD6753F; };
+		7CC9C0DDA04CB61B335184DB /* KaraokePlayer.swift */ = {isa = PBXBuildFile; fileRef = 04FF3E195B7AA6B849A00761; };
+		92E4AB4D6DEF5DE76A38E2B9 /* KaraokeView.swift */ = {isa = PBXBuildFile; fileRef = 24ED21CEA468EA4AC7CDB0BA; };
+		7447188BBF3EB28F70DB5D3E /* LyricsEditorView.swift */ = {isa = PBXBuildFile; fileRef = 25573B4A83B1F35A585F0A88; };
+		0E1AB91CA534C8C141F72254 /* LyricsStageView.swift */ = {isa = PBXBuildFile; fileRef = 49A24D1E5CB9A2AB403B1042; };
+		2BFACD037FCBD005487BA1EA /* Library.swift */ = {isa = PBXBuildFile; fileRef = CCA400ABA2329854DCCEB100; };
+		93004BF1CF424E873F9EA978 /* PianoStudio.swift */ = {isa = PBXBuildFile; fileRef = 59C1F4D589C4F1C66E15BC9E; };
+		88894F09A289E78A3422FC5A /* Assets.xcassets */ = {isa = PBXBuildFile; fileRef = 916E20BBABFDEEC3E7628E29; };
+		D287F5D9E349243FF4AA39DF /* lame.min.js */ = {isa = PBXBuildFile; fileRef = 44F4A62B7E5DE2669A730966; };
+		05EA1AF1D11A980D1453D825 /* MainViews.swift */ = {isa = PBXBuildFile; fileRef = 832A74FF31D5D92C19C3FC4A; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		41138744E6ECCFFFBF3BBDA0 /* FPM Studio Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FPM Studio Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D809DF305EB104671D6DBE93 /* AIStudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIStudio.swift"; sourceTree = "<group>"; };
+		7A86BC60F559A58775C9390A /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSettings.swift"; sourceTree = "<group>"; };
+		B8DD9995155F1913BFF68302 /* FPMStudioLiveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FPMStudioLiveApp.swift"; sourceTree = "<group>"; };
+		5F825F35AF554CA25096CDA7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Theme.swift"; sourceTree = "<group>"; };
+		D4C55496D3DA09C5B5DC57E8 /* AudioAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioAnalyzer.swift"; sourceTree = "<group>"; };
+		983EBA12780DCECBF06626E7 /* AudioFilePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioFilePlayer.swift"; sourceTree = "<group>"; };
+		59145A76EEF30D6BA4EB61D0 /* AudioHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioHub.swift"; sourceTree = "<group>"; };
+		A822F6FAB73AD1E214515891 /* MIDISequencer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDISequencer.swift"; sourceTree = "<group>"; };
+		8F140C130442484862EF5EFC /* Mastering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Mastering.swift"; sourceTree = "<group>"; };
+		D0E456BA6FA68C3660ED236C /* MicEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MicEngine.swift"; sourceTree = "<group>"; };
+		E0A636DBFC3F223E732D4DFD /* OfflineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OfflineRenderer.swift"; sourceTree = "<group>"; };
+		586C48A1E73175CB24E1C4F1 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Chord.swift"; sourceTree = "<group>"; };
+		A6B2A5332B811656C786B90F /* ChordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChordEngine.swift"; sourceTree = "<group>"; };
+		307C5EC30768D401BF74343A /* Lyrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Lyrics.swift"; sourceTree = "<group>"; };
+		9C8CC3753B3D54BF89B4EF84 /* MIDIFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIFile.swift"; sourceTree = "<group>"; };
+		4E8C0B0F57E93C50864F5650 /* MIDIWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIWriter.swift"; sourceTree = "<group>"; };
+		A4BE38F1B29E4C2C0E193EBD /* PianoArranger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PianoArranger.swift"; sourceTree = "<group>"; };
+		441AB21DAB3279DA563F7A30 /* SongGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongGenerator.swift"; sourceTree = "<group>"; };
+		D2D0517CAA37A3AA185ECA6F /* SongStructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongStructure.swift"; sourceTree = "<group>"; };
+		24CB3C2EB7B2F7D2272C4C58 /* DJController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJController.swift"; sourceTree = "<group>"; };
+		DA205542BF0CFE22FED80B38 /* DJView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJView.swift"; sourceTree = "<group>"; };
+		592D1037FE8DD7227FD6753F /* Deck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Deck.swift"; sourceTree = "<group>"; };
+		04FF3E195B7AA6B849A00761 /* KaraokePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokePlayer.swift"; sourceTree = "<group>"; };
+		24ED21CEA468EA4AC7CDB0BA /* KaraokeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokeView.swift"; sourceTree = "<group>"; };
+		25573B4A83B1F35A585F0A88 /* LyricsEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsEditorView.swift"; sourceTree = "<group>"; };
+		49A24D1E5CB9A2AB403B1042 /* LyricsStageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsStageView.swift"; sourceTree = "<group>"; };
+		CCA400ABA2329854DCCEB100 /* Library.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Library.swift"; sourceTree = "<group>"; };
+		59C1F4D589C4F1C66E15BC9E /* PianoStudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PianoStudio.swift"; sourceTree = "<group>"; };
+		916E20BBABFDEEC3E7628E29 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
+		17DEC090E3D08931AE1CC1A6 /* FPMStudioLive.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "FPMStudioLive.entitlements"; sourceTree = "<group>"; };
+		F2A37A33F5493F20F8BDE8A1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
+		44F4A62B7E5DE2669A730966 /* lame.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "lame.min.js"; sourceTree = "<group>"; };
+		832A74FF31D5D92C19C3FC4A /* MainViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MainViews.swift"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4F6F5CC3FCCF73F75AE9CCF4 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (
+			); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2B731CEFC6751AAE0EC69B98 = {isa = PBXGroup; children = (
+				3191DAF581E0C7A55600A557,
+				86024CAD1E83101D97359D73,
+			); sourceTree = "<group>"; };
+		86024CAD1E83101D97359D73 /* Products */ = {isa = PBXGroup; children = (
+				41138744E6ECCFFFBF3BBDA0,
+			); name = Products; sourceTree = "<group>"; };
+		3191DAF581E0C7A55600A557 /* FPMStudioLive */ = {isa = PBXGroup; children = (
+				DCB0714900BC9F7F1836A94A,
+				22EE43E5F9A80405E6DFEACD,
+				C0371FE722F9C2F5935E1FD2,
+				39173558B7F8BBD9119F85A1,
+				B821D638A64C97AF6A4771C9,
+				F57D91840811513A58C9FCB3,
+				3789DFDE4ABD975D422EEC10,
+				A7B454664260178F08DECF25,
+				D7836E24B5D1D972A77E37FB,
+				96D7D5659D1003A0F191DD67,
+			); path = "FPMStudioLive"; sourceTree = "<group>"; };
+		DCB0714900BC9F7F1836A94A /* AIStudio */ = {isa = PBXGroup; children = (
+				D809DF305EB104671D6DBE93,
+			); path = "AIStudio"; sourceTree = "<group>"; };
+		22EE43E5F9A80405E6DFEACD /* App */ = {isa = PBXGroup; children = (
+				7A86BC60F559A58775C9390A,
+				B8DD9995155F1913BFF68302,
+				5F825F35AF554CA25096CDA7,
+			); path = "App"; sourceTree = "<group>"; };
+		C0371FE722F9C2F5935E1FD2 /* Audio */ = {isa = PBXGroup; children = (
+				D4C55496D3DA09C5B5DC57E8,
+				983EBA12780DCECBF06626E7,
+				59145A76EEF30D6BA4EB61D0,
+				A822F6FAB73AD1E214515891,
+				8F140C130442484862EF5EFC,
+				D0E456BA6FA68C3660ED236C,
+				E0A636DBFC3F223E732D4DFD,
+			); path = "Audio"; sourceTree = "<group>"; };
+		39173558B7F8BBD9119F85A1 /* Core */ = {isa = PBXGroup; children = (
+				586C48A1E73175CB24E1C4F1,
+				A6B2A5332B811656C786B90F,
+				307C5EC30768D401BF74343A,
+				9C8CC3753B3D54BF89B4EF84,
+				4E8C0B0F57E93C50864F5650,
+				A4BE38F1B29E4C2C0E193EBD,
+				441AB21DAB3279DA563F7A30,
+				D2D0517CAA37A3AA185ECA6F,
+			); path = "Core"; sourceTree = "<group>"; };
+		B821D638A64C97AF6A4771C9 /* DJ */ = {isa = PBXGroup; children = (
+				24CB3C2EB7B2F7D2272C4C58,
+				DA205542BF0CFE22FED80B38,
+				592D1037FE8DD7227FD6753F,
+			); path = "DJ"; sourceTree = "<group>"; };
+		F57D91840811513A58C9FCB3 /* Karaoke */ = {isa = PBXGroup; children = (
+				04FF3E195B7AA6B849A00761,
+				24ED21CEA468EA4AC7CDB0BA,
+				25573B4A83B1F35A585F0A88,
+				49A24D1E5CB9A2AB403B1042,
+			); path = "Karaoke"; sourceTree = "<group>"; };
+		3789DFDE4ABD975D422EEC10 /* Library */ = {isa = PBXGroup; children = (
+				CCA400ABA2329854DCCEB100,
+			); path = "Library"; sourceTree = "<group>"; };
+		A7B454664260178F08DECF25 /* Piano */ = {isa = PBXGroup; children = (
+				59C1F4D589C4F1C66E15BC9E,
+			); path = "Piano"; sourceTree = "<group>"; };
+		D7836E24B5D1D972A77E37FB /* Resources */ = {isa = PBXGroup; children = (
+				916E20BBABFDEEC3E7628E29,
+				17DEC090E3D08931AE1CC1A6,
+				F2A37A33F5493F20F8BDE8A1,
+				44F4A62B7E5DE2669A730966,
+			); path = "Resources"; sourceTree = "<group>"; };
+		96D7D5659D1003A0F191DD67 /* UI */ = {isa = PBXGroup; children = (
+				832A74FF31D5D92C19C3FC4A,
+			); path = "UI"; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8C66E7C4DCBAE148372C6C0C /* FPMStudioLive */ = {isa = PBXNativeTarget; buildConfigurationList = 97C3CCC2320F36428F396148; buildPhases = (
+				F2AB5FB218DA8B84623F4557,
+				4F6F5CC3FCCF73F75AE9CCF4,
+				55B558C7EF820E6E00E5993B,
+			); buildRules = (
+			); dependencies = (
+			); name = FPMStudioLive; productName = FPMStudioLive; productReference = 41138744E6ECCFFFBF3BBDA0; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AC8D5BD8C9838C3B385887B7 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1420; LastUpgradeCheck = 1420; TargetAttributes = { 8C66E7C4DCBAE148372C6C0C = { CreatedOnToolsVersion = 14.2; }; }; }; buildConfigurationList = B70BFAED9452B281FBE6DE10; compatibilityVersion = "Xcode 12.0"; developmentRegion = it; hasScannedForEncodings = 0; knownRegions = (
+				it,
+				en,
+				Base,
+			); mainGroup = 2B731CEFC6751AAE0EC69B98; productRefGroup = 86024CAD1E83101D97359D73; projectDirPath = ""; projectRoot = ""; targets = (
+				8C66E7C4DCBAE148372C6C0C,
+			); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		55B558C7EF820E6E00E5993B = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+				88894F09A289E78A3422FC5A,
+				D287F5D9E349243FF4AA39DF,
+			); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F2AB5FB218DA8B84623F4557 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+				48290134E5BBA6453CE71005,
+				9E6DD4DB5134B48B43C9C951,
+				8F8C2DBDCFC8315FCCC5106F,
+				40C628A595D2A024DEB8F5E7,
+				AB6549643CA9631546CEE298,
+				30E1537C3BCEE0188F39D01F,
+				AEC968B1177195F5D06A5452,
+				6C08D5C60B3F5DD3A8AD7A8E,
+				08CA720700C8558C03A832AB,
+				8A941AB3D2D76464E4B8B621,
+				2F62514B110669242B7FFD0E,
+				304AF6FF922E55EC92BE272C,
+				4CA8CAFB49BEAFFE7167493E,
+				4E3E10CABF8E8C4BE16EB1DE,
+				70EA68AE2EF73406DFF4C18F,
+				079FB16B8F0343D8CED60F9F,
+				BF510B445E2793ACDA7FAD1F,
+				20346EBEEA040F31B5455B01,
+				FB36361C06063B35477BD57F,
+				84C13AFEA160D4E0A33ADECD,
+				2B53ABC965C72CF6977D59FF,
+				1EC1CBA1A062BE26D7951B5E,
+				7CC9C0DDA04CB61B335184DB,
+				92E4AB4D6DEF5DE76A38E2B9,
+				7447188BBF3EB28F70DB5D3E,
+				0E1AB91CA534C8C141F72254,
+				2BFACD037FCBD005487BA1EA,
+				93004BF1CF424E873F9EA978,
+				05EA1AF1D11A980D1453D825,
+			); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		8038E00A22F0A72EE3AF54D4 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				MTL_FAST_MATH = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			}; name = Debug; };
+		78B1813187FAA8EDA065B55E /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				MTL_FAST_MATH = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				ONLY_ACTIVE_ARCH = NO;
+			}; name = Release; };
+		0B7AB2ACF9815C997604B822 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FPMStudioLive/Resources/FPMStudioLive.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_APP_SANDBOX = NO;
+				INFOPLIST_FILE = FPMStudioLive/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = it.fpm.studiolive;
+				PRODUCT_NAME = "FPM Studio Live";
+				SWIFT_VERSION = 5.0;
+				ARCHS = "$(ARCHS_STANDARD)";
+			}; name = Debug; };
+		09D2A97EC581DB30FC11C447 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FPMStudioLive/Resources/FPMStudioLive.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_APP_SANDBOX = NO;
+				INFOPLIST_FILE = FPMStudioLive/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = it.fpm.studiolive;
+				PRODUCT_NAME = "FPM Studio Live";
+				SWIFT_VERSION = 5.0;
+				ARCHS = "$(ARCHS_STANDARD)";
+			}; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B70BFAED9452B281FBE6DE10 = {isa = XCConfigurationList; buildConfigurations = (
+				8038E00A22F0A72EE3AF54D4,
+				78B1813187FAA8EDA065B55E,
+			); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		97C3CCC2320F36428F396148 = {isa = XCConfigurationList; buildConfigurations = (
+				0B7AB2ACF9815C997604B822,
+				09D2A97EC581DB30FC11C447,
+			); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = AC8D5BD8C9838C3B385887B7 /* Project object */;
+}

@@ -1,0 +1,363 @@
+import Foundation
+import AVFoundation
+import SwiftUI
+
+struct ChannelStrip: Identifiable, Hashable {
+    var id: Int { channel }
+    var channel: Int
+    var name: String
+    var program: Int
+    var muted = false
+    var solo = false
+    var gain: Double = 1
+    var isMelody = false
+}
+
+/// Posizione di riproduzione, separata per non ridisegnare tutta la finestra 30 volte al secondo.
+final class PlaybackClock: ObservableObject {
+    @Published var position: Double = 0
+}
+
+/// Lettore karaoke: basi MIDI/KAR (SoundFont), MP3 e video, con testo, accordi, tono, tempo e mixer.
+final class KaraokePlayer: ObservableObject {
+    @Published private(set) var item: LibraryItem?
+    @Published private(set) var kind: SongKind?
+    @Published private(set) var isPlaying = false
+    @Published private(set) var duration: Double = 0
+    @Published var transpose = 0 { didSet { applyTransposeTempo() } }
+    @Published var tempo = 1.0 { didSet { applyTransposeTempo() } }
+    @Published var lyrics = KaraokeLyrics()
+    @Published var chords: [ChordEvent] = []
+    @Published var sections: [SongSection] = []
+    @Published var lyricsOffset = 0.0
+    @Published private(set) var channels: [ChannelStrip] = []
+    @Published private(set) var keyName = ""
+    @Published private(set) var bpm: Double?
+    @Published private(set) var analyzing = false
+    @Published var status = ""
+    @Published private(set) var nextUpTitle: String?
+    @Published private(set) var countdownToNext: Double?
+    @Published private(set) var videoPlayer: AVPlayer?
+    @Published private(set) var midi: MIDIFile?
+    @Published private(set) var melodyChannel: Int?
+
+    weak var library: Library?
+    let clock = PlaybackClock()
+    var position: Double {
+        get { clock.position }
+        set { if abs(clock.position - newValue) > 0.0005 { clock.position = newValue } }
+    }
+    private let hub = AudioHub.shared
+    private let fileAudio = AudioFilePlayer()
+    private var timer: Timer?
+    private var videoUsesOwnAudio = false
+    private var advanceWork: DispatchWorkItem?
+    private let settings = AppSettings.shared
+
+    init() {
+        hub.start()
+        if !settings.soundFontPath.isEmpty { _ = hub.loadSoundBank(path: settings.soundFontPath) }
+        hub.synthReverb.wetDryMix = Float(settings.synthReverb)
+        AudioHub.configureSynthEQ(hub.synthEQ, enabled: settings.synthEQ)
+        hub.sequencer.onEnd = { [weak self] in self?.songEnded() }
+        fileAudio.onEnd = { [weak self] in self?.songEnded() }
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(timer!, forMode: .common)
+    }
+
+    /// Tempo del testo (secondi del brano originale), con la correzione di sincronia.
+    var lyricsTime: Double { position + lyricsOffset }
+
+    // MARK: Caricamento
+
+    func load(_ item: LibraryItem, autoplay: Bool = false) {
+        stop()
+        advanceWork?.cancel(); countdownToNext = nil
+        self.item = item
+        kind = item.kind
+        status = ""
+        lyrics = KaraokeLyrics(); chords = []; sections = []; channels = []; keyName = ""; bpm = nil
+        videoPlayer = nil; midi = nil; melodyChannel = nil
+        let sidecar = SongSidecar.load(for: item.url)
+        lyricsOffset = sidecar?.lyricsOffset ?? 0
+        do {
+            switch item.kind {
+            case .midi:
+                let m = try MIDIFile(url: item.url)
+                midi = m
+                hub.sequencer.load(m)
+                duration = m.duration
+                bpm = m.mainBPM
+                lyrics = sidecar?.lyrics ?? m.karaokeLyrics()
+                if lyrics.title == nil { lyrics.title = item.title }
+                let an = ChordEngine.analyze(m, lyrics: lyrics, melodyOverride: sidecar?.melodyChannel)
+                melodyChannel = an.melodyChannel
+                chords = sidecar?.chords ?? (lyrics.chordEvents.isEmpty ? ChordEngine.events(an.regions, midi: m) : lyrics.chordEvents)
+                keyName = KeyDetector.name(root: an.key.root, minor: an.key.minor, notation: settings.notation)
+                sections = sidecar?.sections ?? SongStructureAnalyzer.analyze(
+                    SongStructureAnalyzer.input(midi: m, lyrics: lyrics, chords: chords, melodyChannel: an.melodyChannel))
+                channels = m.usedChannels.map { ch in
+                    let prog = m.programs[ch] ?? 0
+                    let trackName = m.notes.first { $0.channel == ch }.flatMap { m.trackNames[$0.track] } ?? ""
+                    let name = ch == 9 ? "Batteria" : (trackName.isEmpty ? GM.name(prog) : trackName)
+                    return ChannelStrip(channel: ch, name: name, program: prog, isMelody: ch == an.melodyChannel)
+                }
+            case .audio, .video:
+                if item.kind == .video {
+                    let p = AVPlayer(url: item.url)
+                    videoPlayer = p
+                    do {
+                        try fileAudio.load(item.url)
+                        p.isMuted = true
+                        videoUsesOwnAudio = false
+                    } catch {
+                        videoUsesOwnAudio = true
+                        status = "Questo video non permette il cambio di tono: suona con l'audio originale."
+                    }
+                    duration = videoUsesOwnAudio ? (p.currentItem?.asset.duration.seconds ?? 0) : fileAudio.duration
+                } else {
+                    try fileAudio.load(item.url)
+                    duration = fileAudio.duration
+                }
+                lyrics = sidecar?.lyrics ?? loadLRC(for: item.url) ?? KaraokeLyrics(title: item.title, artist: item.artist, lines: [])
+                chords = sidecar?.chords ?? lyrics.chordEvents
+                sections = sidecar?.sections ?? []
+                if chords.isEmpty || sections.isEmpty { analyzeAudio(item.url, keepChords: !chords.isEmpty) }
+            }
+        } catch {
+            status = "Impossibile aprire il brano: \(error.localizedDescription)"
+            return
+        }
+        transpose = sidecar?.defaultTranspose ?? 0
+        tempo = sidecar?.defaultTempo ?? 1
+        nextUpTitle = library?.setlist.first(where: { $0 != item })?.title
+        if autoplay { play() }
+    }
+
+    private func loadLRC(for url: URL) -> KaraokeLyrics? {
+        let lrc = url.deletingPathExtension().appendingPathExtension("lrc")
+        guard let s = try? String(contentsOf: lrc) else { return nil }
+        let l = KaraokeLyrics.fromLRC(s)
+        return l.isEmpty ? nil : l
+    }
+
+    private func analyzeAudio(_ url: URL, keepChords: Bool) {
+        analyzing = true
+        let lyr = lyrics
+        DispatchQueue.global(qos: .utility).async {
+            let r = try? AudioAnalyzer.analyze(url: url)
+            DispatchQueue.main.async {
+                self.analyzing = false
+                guard let r = r, self.item?.url == url else { return }
+                self.bpm = r.bpm
+                self.keyName = KeyDetector.name(root: r.keyRoot, minor: r.keyMinor, notation: self.settings.notation)
+                if !keepChords { self.chords = r.chords }
+                if self.sections.isEmpty {
+                    let bars = r.bars
+                    let input = SongStructureAnalyzer.Input(bars: bars, duration: r.duration, musicStart: r.leadIn, lyrics: lyr.isEmpty ? nil : lyr,
+                                                            chords: self.chords, vocalTimes: [], density: bars.map { _ in 1 })
+                    self.sections = SongStructureAnalyzer.analyze(input)
+                }
+            }
+        }
+    }
+
+    // MARK: Trasporto
+
+    func play() {
+        guard let k = kind else { return }
+        hub.start()
+        advanceWork?.cancel(); countdownToNext = nil
+        switch k {
+        case .midi: hub.sequencer.play()
+        case .audio: fileAudio.play()
+        case .video:
+            if videoUsesOwnAudio { videoPlayer?.rate = Float(tempo) } else { fileAudio.play(); videoPlayer?.rate = Float(tempo) }
+        }
+        isPlaying = true
+    }
+
+    func pause() {
+        switch kind {
+        case .midi: hub.sequencer.pause()
+        case .audio: fileAudio.pause()
+        case .video: videoPlayer?.pause(); if !videoUsesOwnAudio { fileAudio.pause() }
+        case .none: break
+        }
+        isPlaying = false
+    }
+
+    func togglePlay() { isPlaying ? pause() : play() }
+
+    func stop() {
+        hub.sequencer.pause()
+        hub.sequencer.seek(to: 0)
+        fileAudio.stop()
+        videoPlayer?.pause()
+        videoPlayer?.seek(to: .zero)
+        isPlaying = false
+        position = 0
+    }
+
+    func seek(to t: Double) {
+        let s = max(0, min(t, duration))
+        switch kind {
+        case .midi: hub.sequencer.seek(to: s)
+        case .audio: fileAudio.seek(to: s)
+        case .video:
+            if !videoUsesOwnAudio { fileAudio.seek(to: s) }
+            videoPlayer?.seek(to: CMTime(seconds: s, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        case .none: break
+        }
+        position = s
+    }
+
+    func skip(_ delta: Double) { seek(to: position + delta) }
+
+    private func applyTransposeTempo() {
+        hub.sequencer.setTranspose(transpose)
+        hub.sequencer.speed = tempo
+        fileAudio.set(transpose: transpose, tempo: tempo)
+        if isPlaying, kind == .video { videoPlayer?.rate = Float(tempo) }
+    }
+
+    private func tick() {
+        guard let k = kind else { return }
+        switch k {
+        case .midi: position = hub.sequencer.position
+        case .audio: position = fileAudio.position
+        case .video:
+            if videoUsesOwnAudio {
+                position = videoPlayer?.currentTime().seconds ?? 0
+                if isPlaying, let p = videoPlayer, p.rate == 0, position >= duration - 0.2 { songEnded() }
+            } else {
+                position = fileAudio.position
+                // Il video segue l'audio.
+                if isPlaying, let p = videoPlayer {
+                    let vt = p.currentTime().seconds
+                    if abs(vt - position) > 0.12 {
+                        p.seek(to: CMTime(seconds: position + 0.05, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Mixer MIDI
+
+    func setMuted(_ ch: Int, _ m: Bool) {
+        guard let i = channels.firstIndex(where: { $0.channel == ch }) else { return }
+        channels[i].muted = m
+        applyMixer()
+    }
+
+    func setSolo(_ ch: Int, _ s: Bool) {
+        guard let i = channels.firstIndex(where: { $0.channel == ch }) else { return }
+        channels[i].solo = s
+        applyMixer()
+    }
+
+    func setGain(_ ch: Int, _ g: Double) {
+        guard let i = channels.firstIndex(where: { $0.channel == ch }) else { return }
+        channels[i].gain = g
+        hub.sequencer.setGain(ch, g)
+    }
+
+    /// Spegne o accende la melodia (per lasciarla alla voce).
+    func toggleMelody() {
+        guard let m = melodyChannel, let i = channels.firstIndex(where: { $0.channel == m }) else { return }
+        setMuted(m, !channels[i].muted)
+    }
+
+    var melodyMuted: Bool { melodyChannel.flatMap { m in channels.first { $0.channel == m }?.muted } ?? false }
+
+    private func applyMixer() {
+        let anySolo = channels.contains { $0.solo }
+        for c in channels { hub.sequencer.setMuted(c.channel, c.muted || (anySolo && !c.solo)) }
+    }
+
+    // MARK: Fine brano e scaletta
+
+    private func songEnded() {
+        isPlaying = false
+        guard settings.autoAdvance, let lib = library else { return }
+        if let cur = item, let i = lib.setlist.firstIndex(of: cur) { lib.setlist.remove(at: i) }
+        guard let next = lib.setlist.first else { status = "Scaletta terminata"; return }
+        let wait = settings.pauseBetweenSongs
+        countdownToNext = wait
+        nextUpTitle = next.title
+        let start = Date()
+        let work = DispatchWorkItem { [weak self] in self?.load(next, autoplay: true) }
+        advanceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: work)
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] t in
+            guard let self = self, self.countdownToNext != nil, !work.isCancelled else { t.invalidate(); return }
+            self.countdownToNext = max(0, wait - Date().timeIntervalSince(start))
+            if self.countdownToNext == 0 { t.invalidate() }
+        }
+    }
+
+    func playNextNow() {
+        guard let lib = library else { return }
+        if let cur = item, let i = lib.setlist.firstIndex(of: cur) { lib.setlist.remove(at: i) }
+        if let next = lib.setlist.first { load(next, autoplay: true) }
+    }
+
+    // MARK: Salvataggio testo/accordi/struttura
+
+    func saveSidecar() {
+        guard let it = item else { return }
+        var s = SongSidecar.load(for: it.url) ?? SongSidecar()
+        s.lyrics = lyrics
+        s.chords = chords
+        s.sections = sections
+        s.lyricsOffset = lyricsOffset
+        s.defaultTranspose = transpose
+        s.defaultTempo = tempo
+        s.melodyChannel = melodyChannel
+        do { try s.save(for: it.url); status = "Testo, accordi e struttura salvati" }
+        catch { status = "Salvataggio non riuscito: \(error.localizedDescription)" }
+    }
+
+    func reloadSoundFont() {
+        if settings.soundFontPath.isEmpty { status = "Suoni di sistema Apple"; return }
+        status = hub.loadSoundBank(path: settings.soundFontPath) ? "SoundFont caricato: \(settings.soundFontName)" : "SoundFont non valido"
+    }
+
+    /// Accordi trasposti per la visualizzazione.
+    func displayChord(_ c: Chord?) -> String {
+        guard let c = c else { return "N.C." }
+        return c.transposed(transpose).name(settings.notation)
+    }
+
+    func currentChordIndex(at t: Double) -> Int? {
+        var idx: Int?
+        for (i, c) in chords.enumerated() { if c.time <= t + 0.05 { idx = i } else { break } }
+        return idx
+    }
+
+    var currentSection: SongSection? { sections.last { $0.start <= lyricsTime + 0.01 } }
+}
+
+/// Nomi italiani degli strumenti General MIDI.
+enum GM {
+    static let names: [String] = [
+        "Pianoforte a coda", "Pianoforte brillante", "Piano elettrico a coda", "Honky-tonk", "Piano Rhodes", "Piano FM", "Clavicembalo", "Clavinet",
+        "Celesta", "Glockenspiel", "Carillon", "Vibrafono", "Marimba", "Xilofono", "Campane tubolari", "Dulcimer",
+        "Organo Hammond", "Organo percussivo", "Organo rock", "Organo da chiesa", "Harmonium", "Fisarmonica", "Armonica", "Bandoneón",
+        "Chitarra classica", "Chitarra acustica", "Chitarra jazz", "Chitarra elettrica", "Chitarra stoppata", "Chitarra overdrive", "Chitarra distorta", "Armonici chitarra",
+        "Contrabbasso", "Basso elettrico (dita)", "Basso elettrico (plettro)", "Basso fretless", "Basso slap 1", "Basso slap 2", "Basso synth 1", "Basso synth 2",
+        "Violino", "Viola", "Violoncello", "Contrabbasso archi", "Archi tremolo", "Archi pizzicato", "Arpa", "Timpani",
+        "Archi", "Archi lenti", "Archi synth 1", "Archi synth 2", "Coro Aah", "Voce Ooh", "Voce synth", "Orchestra hit",
+        "Tromba", "Trombone", "Tuba", "Tromba sordina", "Corno", "Sezione fiati", "Fiati synth 1", "Fiati synth 2",
+        "Sax soprano", "Sax contralto", "Sax tenore", "Sax baritono", "Oboe", "Corno inglese", "Fagotto", "Clarinetto",
+        "Ottavino", "Flauto", "Flauto dolce", "Flauto di Pan", "Bottiglia", "Shakuhachi", "Fischio", "Ocarina",
+        "Lead quadra", "Lead dente di sega", "Lead calliope", "Lead chiff", "Lead charang", "Lead voce", "Lead quinte", "Lead basso+lead",
+        "Pad new age", "Pad caldo", "Pad polysynth", "Pad coro", "Pad archetto", "Pad metallico", "Pad halo", "Pad sweep",
+        "FX pioggia", "FX colonna sonora", "FX cristallo", "FX atmosfera", "FX luminoso", "FX goblin", "FX eco", "FX sci-fi",
+        "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba", "Cornamusa", "Fiddle", "Shanai",
+        "Campanella", "Agogo", "Steel drum", "Woodblock", "Taiko", "Tom melodico", "Batteria synth", "Piatto rovesciato",
+        "Rumore corde", "Respiro", "Mare", "Uccellini", "Telefono", "Elicottero", "Applausi", "Sparo"
+    ]
+    static func name(_ p: Int) -> String { names.indices.contains(p) ? names[p] : "Programma \(p)" }
+}
