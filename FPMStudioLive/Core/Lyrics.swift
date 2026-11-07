@@ -240,6 +240,11 @@ struct SongSidecar: Codable {
     var defaultTranspose: Int = 0
     var defaultTempo: Double = 1
     var melodyChannel: Int?
+    // Funzioni avanzate (campi facoltativi: i file vecchi restano leggibili).
+    var markers: [SongMarker]?
+    var events: [LiveEvent]?
+    var documentPath: String?
+    var favorite: Bool?
 
     static func url(for song: URL) -> URL {
         song.deletingPathExtension().appendingPathExtension(song.pathExtension + ".fpm.json")

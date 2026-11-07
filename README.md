@@ -81,6 +81,23 @@ Procedura guidata in 5 passi come quella di Win Live AI Studio, ma **senza credi
 > FPM Studio Live compone **sul tuo Mac** con regole musicali (armonia, stili, arrangiamento): è gratuito e illimitato,
 > ma non produce una voce umana cantata; il risultato suona con il SoundFont che scegli.
 
+### 🎛️ Funzioni avanzate (dal capitolato Win Live 16)
+Tutte in **Funzioni avanzate**; lo stato reale di ogni requisito è nella scheda *Stato funzioni* e in [`docs/REQUISITI.md`](docs/REQUISITI.md) (25 implementati, 12 limitati, 9 non ancora disponibili).
+- **Marker** (10 per brano), **loop** con numero di ripetizioni, marker veloce durante l'esecuzione (tasto K).
+- **Eventi sulla timeline**: KEY CHANGE, TEMPO CHANGE, SONG VOLUME, FADE OUT, MESSAGGIO a schermo, PDF PAGNUM, CUSTOM SAMPLE, START MIX, METRONOMO on/off, SALTA A MARKER. Dopo salti e loop lo stato si ricalcola senza eseguire due volte gli eventi.
+- **Metronomo e pre-count** sincronizzati al campione (basi MIDI); modalità canali **M U B D A N** (melodia, solo melodia, basso+batteria, solo batteria, tutti, reset).
+- **Chord Bar** con accordi successivi, **tastiera di pianoforte** e **diagramma per chitarra**.
+- **Leggio PDF/TXT/RTF** per brano, cambio pagina da evento, tastiera o pedale Bluetooth.
+- **Campionatore** da 100 slot (5 banchi), loop, gruppi di stop, volume.
+- **Multitraccia** fino a 16 stem sincronizzate, gain/pan/mute/solo, **"non trasporre"** (batteria e click esclusi da soli), progetto aperto `progetto.stageproj.json`.
+- **Medley Creator** fino a 6 brani: taglio, fade, incroci, gain, export WAV/MP3/M4A.
+- **Musica di sottofondo** automatica a palco fermo, con dissolvenza quando parte un brano.
+- **Karaoke Web Monitor** con QR: il pubblico legge il testo sul telefono (rete locale) e sceglie carattere, dimensione e colori; **telecomando** dal telefono con PIN.
+- **Registrazione della voce** sulla base (WAV 24 bit).
+- **Scorciatoie rimappabili** con conflitti evidenziati (Spazio, O, Fine, Invio, Q, +/−, PagSu/PagGiù, T, M, U, D, B, A, N, K, frecce, Z, C) e **Show lock**.
+
+Non ancora disponibili (dichiarati, senza pulsanti finti): database SQLite con 39 scalette, 4 uscite audio separate, gestione dispositivi MIDI e MIDI learn, piano roll/drum editor, separazione stem con AI, songbook PDF, CDG, cloud.
+
 ---
 
 ## Scorciatoie

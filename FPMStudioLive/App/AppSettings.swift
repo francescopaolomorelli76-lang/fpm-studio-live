@@ -17,6 +17,8 @@ final class AppSettings: ObservableObject {
     @Published var synthEQ: Bool { didSet { d.set(synthEQ, forKey: "synthEQ"); AudioHub.configureSynthEQ(AudioHub.shared.synthEQ, enabled: synthEQ) } }
     @Published var crossfadeSeconds: Double { didSet { d.set(crossfadeSeconds, forKey: "crossfadeSeconds") } }
     @Published var libraryFolders: [String] { didSet { d.set(libraryFolders, forKey: "libraryFolders") } }
+    /// Show lock: blocca modifiche accidentali durante lo spettacolo.
+    @Published var showLock: Bool { didSet { d.set(showLock, forKey: "showLock") } }
 
     private init() {
         soundFontPath = d.string(forKey: "soundFontPath") ?? ""
@@ -29,6 +31,7 @@ final class AppSettings: ObservableObject {
         synthEQ = d.object(forKey: "synthEQ") as? Bool ?? true
         crossfadeSeconds = d.object(forKey: "crossfadeSeconds") as? Double ?? 8
         libraryFolders = d.stringArray(forKey: "libraryFolders") ?? []
+        showLock = d.bool(forKey: "showLock")
     }
 
     var soundFontURL: URL? { soundFontPath.isEmpty ? nil : URL(fileURLWithPath: soundFontPath) }

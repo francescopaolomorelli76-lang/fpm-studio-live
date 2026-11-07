@@ -133,3 +133,22 @@ func runGeneratorTest() {
     print("Da zero 3min:", g3.summary, g3.sections.map { $0.title })
     print(Syllabifier.split("cammino"), Syllabifier.split("preghiera"), Syllabifier.split("ascolterà"), Syllabifier.split("strade"), Syllabifier.split("nascerà"))
 }
+
+func runAdvancedTest() {
+    let evs = [LiveEvent(time: 10, kind: .keyChange, value: 2), LiveEvent(time: 20, kind: .message, text: "Tutti insieme!"),
+               LiveEvent(time: 30, kind: .clearMessage), LiveEvent(time: 40, kind: .keyChange, value: -1),
+               LiveEvent(time: 45, kind: .pdfPage, value: 3), LiveEvent(time: 50, kind: .fadeOut, value: 4)]
+    print("stato a 25:", EventTimeline.state(at: 25, events: evs))
+    print("stato a 47:", EventTimeline.state(at: 47, events: evs))
+    print("da eseguire 39..51:", EventTimeline.due(from: 39, to: 51, events: evs).map { $0.kind.rawValue })
+    print("salto indietro:", EventTimeline.due(from: 51, to: 12, events: evs).count)
+    // Sidecar vecchio senza campi nuovi
+    let old = #"{"version":1,"lyricsOffset":0,"defaultTranspose":0,"defaultTempo":1}"#
+    let sc = try! JSONDecoder().decode(SongSidecar.self, from: old.data(using: .utf8)!)
+    print("sidecar vecchio ok, marker:", sc.markers as Any)
+    for n in ["Do", "Lam", "Sol7", "Fa", "Sib", "Fa#m", "Mi", "Re", "Do#m7", "Lab7+"] {
+        let c = Chord.parse(n)!
+        let g = ChordDiagrams.guitar(c)
+        print(n, g.frets.map { $0 < 0 ? "x" : String($0) }.joined(), "base", g.baseFret, "| piano", ChordDiagrams.piano(c).notes)
+    }
+}

@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		48290134E5BBA6453CE71005 /* AIStudio.swift */ = {isa = PBXBuildFile; fileRef = D809DF305EB104671D6DBE93; };
+		C68BDD2DBB3A87BC3A710190 /* AdvancedView.swift */ = {isa = PBXBuildFile; fileRef = F9314390A9BCD83527F4F7B2; };
+		F7D07AC009AAC71D2A4FCF54 /* LiveAudio.swift */ = {isa = PBXBuildFile; fileRef = 6D3A954FC24B20E792F55D3E; };
+		90901DB02732E3E58950978B /* Shortcuts.swift */ = {isa = PBXBuildFile; fileRef = 850ED252EE7A8BE33D89BC71; };
+		BF4424141DECDFCAEF767195 /* StageTools.swift */ = {isa = PBXBuildFile; fileRef = DEAA9C69AE0369C7EC648773; };
+		D892BA29746CD778AEF54CDA /* WebMonitor.swift */ = {isa = PBXBuildFile; fileRef = DE3C709087810D519F724724; };
 		9E6DD4DB5134B48B43C9C951 /* AppSettings.swift */ = {isa = PBXBuildFile; fileRef = 7A86BC60F559A58775C9390A; };
 		8F8C2DBDCFC8315FCCC5106F /* FPMStudioLiveApp.swift */ = {isa = PBXBuildFile; fileRef = B8DD9995155F1913BFF68302; };
 		40C628A595D2A024DEB8F5E7 /* Theme.swift */ = {isa = PBXBuildFile; fileRef = 5F825F35AF554CA25096CDA7; };
@@ -20,6 +25,7 @@
 		2F62514B110669242B7FFD0E /* OfflineRenderer.swift */ = {isa = PBXBuildFile; fileRef = E0A636DBFC3F223E732D4DFD; };
 		304AF6FF922E55EC92BE272C /* Chord.swift */ = {isa = PBXBuildFile; fileRef = 586C48A1E73175CB24E1C4F1; };
 		4CA8CAFB49BEAFFE7167493E /* ChordEngine.swift */ = {isa = PBXBuildFile; fileRef = A6B2A5332B811656C786B90F; };
+		FF03C86ABA8991909F4BC2AA /* LiveEvents.swift */ = {isa = PBXBuildFile; fileRef = 9104604AA09356FB292910A6; };
 		4E3E10CABF8E8C4BE16EB1DE /* Lyrics.swift */ = {isa = PBXBuildFile; fileRef = 307C5EC30768D401BF74343A; };
 		70EA68AE2EF73406DFF4C18F /* MIDIFile.swift */ = {isa = PBXBuildFile; fileRef = 9C8CC3753B3D54BF89B4EF84; };
 		079FB16B8F0343D8CED60F9F /* MIDIWriter.swift */ = {isa = PBXBuildFile; fileRef = 4E8C0B0F57E93C50864F5650; };
@@ -29,6 +35,7 @@
 		84C13AFEA160D4E0A33ADECD /* DJController.swift */ = {isa = PBXBuildFile; fileRef = 24CB3C2EB7B2F7D2272C4C58; };
 		2B53ABC965C72CF6977D59FF /* DJView.swift */ = {isa = PBXBuildFile; fileRef = DA205542BF0CFE22FED80B38; };
 		1EC1CBA1A062BE26D7951B5E /* Deck.swift */ = {isa = PBXBuildFile; fileRef = 592D1037FE8DD7227FD6753F; };
+		883DC60D230C61C83A94152E /* KaraokePlayer+Advanced.swift */ = {isa = PBXBuildFile; fileRef = 0D0B6441C4E81A37E30C7BFA; };
 		7CC9C0DDA04CB61B335184DB /* KaraokePlayer.swift */ = {isa = PBXBuildFile; fileRef = 04FF3E195B7AA6B849A00761; };
 		92E4AB4D6DEF5DE76A38E2B9 /* KaraokeView.swift */ = {isa = PBXBuildFile; fileRef = 24ED21CEA468EA4AC7CDB0BA; };
 		7447188BBF3EB28F70DB5D3E /* LyricsEditorView.swift */ = {isa = PBXBuildFile; fileRef = 25573B4A83B1F35A585F0A88; };
@@ -43,6 +50,11 @@
 /* Begin PBXFileReference section */
 		41138744E6ECCFFFBF3BBDA0 /* FPM Studio Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FPM Studio Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D809DF305EB104671D6DBE93 /* AIStudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIStudio.swift"; sourceTree = "<group>"; };
+		F9314390A9BCD83527F4F7B2 /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AdvancedView.swift"; sourceTree = "<group>"; };
+		6D3A954FC24B20E792F55D3E /* LiveAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveAudio.swift"; sourceTree = "<group>"; };
+		850ED252EE7A8BE33D89BC71 /* Shortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shortcuts.swift"; sourceTree = "<group>"; };
+		DEAA9C69AE0369C7EC648773 /* StageTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StageTools.swift"; sourceTree = "<group>"; };
+		DE3C709087810D519F724724 /* WebMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebMonitor.swift"; sourceTree = "<group>"; };
 		7A86BC60F559A58775C9390A /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSettings.swift"; sourceTree = "<group>"; };
 		B8DD9995155F1913BFF68302 /* FPMStudioLiveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FPMStudioLiveApp.swift"; sourceTree = "<group>"; };
 		5F825F35AF554CA25096CDA7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Theme.swift"; sourceTree = "<group>"; };
@@ -55,6 +67,7 @@
 		E0A636DBFC3F223E732D4DFD /* OfflineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OfflineRenderer.swift"; sourceTree = "<group>"; };
 		586C48A1E73175CB24E1C4F1 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Chord.swift"; sourceTree = "<group>"; };
 		A6B2A5332B811656C786B90F /* ChordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChordEngine.swift"; sourceTree = "<group>"; };
+		9104604AA09356FB292910A6 /* LiveEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveEvents.swift"; sourceTree = "<group>"; };
 		307C5EC30768D401BF74343A /* Lyrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Lyrics.swift"; sourceTree = "<group>"; };
 		9C8CC3753B3D54BF89B4EF84 /* MIDIFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIFile.swift"; sourceTree = "<group>"; };
 		4E8C0B0F57E93C50864F5650 /* MIDIWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIWriter.swift"; sourceTree = "<group>"; };
@@ -64,6 +77,7 @@
 		24CB3C2EB7B2F7D2272C4C58 /* DJController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJController.swift"; sourceTree = "<group>"; };
 		DA205542BF0CFE22FED80B38 /* DJView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJView.swift"; sourceTree = "<group>"; };
 		592D1037FE8DD7227FD6753F /* Deck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Deck.swift"; sourceTree = "<group>"; };
+		0D0B6441C4E81A37E30C7BFA /* KaraokePlayer+Advanced.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokePlayer+Advanced.swift"; sourceTree = "<group>"; };
 		04FF3E195B7AA6B849A00761 /* KaraokePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokePlayer.swift"; sourceTree = "<group>"; };
 		24ED21CEA468EA4AC7CDB0BA /* KaraokeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokeView.swift"; sourceTree = "<group>"; };
 		25573B4A83B1F35A585F0A88 /* LyricsEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsEditorView.swift"; sourceTree = "<group>"; };
@@ -92,6 +106,7 @@
 			); name = Products; sourceTree = "<group>"; };
 		3191DAF581E0C7A55600A557 /* FPMStudioLive */ = {isa = PBXGroup; children = (
 				DCB0714900BC9F7F1836A94A,
+				9C82C6E8121A3A38CD2D9410,
 				22EE43E5F9A80405E6DFEACD,
 				C0371FE722F9C2F5935E1FD2,
 				39173558B7F8BBD9119F85A1,
@@ -105,6 +120,13 @@
 		DCB0714900BC9F7F1836A94A /* AIStudio */ = {isa = PBXGroup; children = (
 				D809DF305EB104671D6DBE93,
 			); path = "AIStudio"; sourceTree = "<group>"; };
+		9C82C6E8121A3A38CD2D9410 /* Advanced */ = {isa = PBXGroup; children = (
+				F9314390A9BCD83527F4F7B2,
+				6D3A954FC24B20E792F55D3E,
+				850ED252EE7A8BE33D89BC71,
+				DEAA9C69AE0369C7EC648773,
+				DE3C709087810D519F724724,
+			); path = "Advanced"; sourceTree = "<group>"; };
 		22EE43E5F9A80405E6DFEACD /* App */ = {isa = PBXGroup; children = (
 				7A86BC60F559A58775C9390A,
 				B8DD9995155F1913BFF68302,
@@ -122,6 +144,7 @@
 		39173558B7F8BBD9119F85A1 /* Core */ = {isa = PBXGroup; children = (
 				586C48A1E73175CB24E1C4F1,
 				A6B2A5332B811656C786B90F,
+				9104604AA09356FB292910A6,
 				307C5EC30768D401BF74343A,
 				9C8CC3753B3D54BF89B4EF84,
 				4E8C0B0F57E93C50864F5650,
@@ -135,6 +158,7 @@
 				592D1037FE8DD7227FD6753F,
 			); path = "DJ"; sourceTree = "<group>"; };
 		F57D91840811513A58C9FCB3 /* Karaoke */ = {isa = PBXGroup; children = (
+				0D0B6441C4E81A37E30C7BFA,
 				04FF3E195B7AA6B849A00761,
 				24ED21CEA468EA4AC7CDB0BA,
 				25573B4A83B1F35A585F0A88,
@@ -187,6 +211,11 @@
 /* Begin PBXSourcesBuildPhase section */
 		F2AB5FB218DA8B84623F4557 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 				48290134E5BBA6453CE71005,
+				C68BDD2DBB3A87BC3A710190,
+				F7D07AC009AAC71D2A4FCF54,
+				90901DB02732E3E58950978B,
+				BF4424141DECDFCAEF767195,
+				D892BA29746CD778AEF54CDA,
 				9E6DD4DB5134B48B43C9C951,
 				8F8C2DBDCFC8315FCCC5106F,
 				40C628A595D2A024DEB8F5E7,
@@ -199,6 +228,7 @@
 				2F62514B110669242B7FFD0E,
 				304AF6FF922E55EC92BE272C,
 				4CA8CAFB49BEAFFE7167493E,
+				FF03C86ABA8991909F4BC2AA,
 				4E3E10CABF8E8C4BE16EB1DE,
 				70EA68AE2EF73406DFF4C18F,
 				079FB16B8F0343D8CED60F9F,
@@ -208,6 +238,7 @@
 				84C13AFEA160D4E0A33ADECD,
 				2B53ABC965C72CF6977D59FF,
 				1EC1CBA1A062BE26D7951B5E,
+				883DC60D230C61C83A94152E,
 				7CC9C0DDA04CB61B335184DB,
 				92E4AB4D6DEF5DE76A38E2B9,
 				7447188BBF3EB28F70DB5D3E,

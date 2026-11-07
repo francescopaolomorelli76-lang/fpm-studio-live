@@ -10,6 +10,13 @@ struct FPMStudioLiveApp: App {
     @StateObject private var mic = MicEngine()
     @StateObject private var piano = PianoStudioModel()
     @StateObject private var ai = AIStudioModel()
+    @StateObject private var sampler = SamplerEngine()
+    @StateObject private var multitrack = MultitrackPlayer()
+    @StateObject private var medley = MedleyCreator()
+    @StateObject private var background = BackgroundMusic()
+    @StateObject private var web = WebMonitor()
+    @StateObject private var recorder = VoiceRecorder()
+    @StateObject private var shortcuts = ShortcutManager()
 
     var body: some Scene {
         WindowGroup("FPM Studio Live") {
@@ -20,6 +27,13 @@ struct FPMStudioLiveApp: App {
                 .environmentObject(mic)
                 .environmentObject(piano)
                 .environmentObject(ai)
+                .environmentObject(sampler)
+                .environmentObject(multitrack)
+                .environmentObject(medley)
+                .environmentObject(background)
+                .environmentObject(web)
+                .environmentObject(recorder)
+                .environmentObject(shortcuts)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

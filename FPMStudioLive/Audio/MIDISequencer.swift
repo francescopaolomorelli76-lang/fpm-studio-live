@@ -73,6 +73,12 @@ final class MIDISequencer {
     private var sentPitch = [[Int16]](repeating: [Int16](repeating: -1, count: 128), count: 16)
     private var channelVolume = [UInt8](repeating: 100, count: 16)
     private var endNotified = false
+    // Metronomo / pre-count: battiti in secondi (quelli negativi sono il conteggio iniziale).
+    private var clicks: [(time: Double, accent: Bool)] = []
+    private var clickIndex = 0
+    private var _metronome = false
+    private(set) var beatsPerBar = 4
+    private(set) var firstBeat = 0.5
 
     var sampleRate: Double = 44100
     var speed: Double = 1
@@ -117,7 +123,26 @@ final class MIDISequencer {
                 evs.append(Ev(time: midi.seconds(atTick: e.tick), status: s, d1: d1, d2: d2))
             }
         }
+        // Griglia dei battiti seguendo i cambi di metrica.
+        var beats: [(time: Double, accent: Bool)] = []
+        let sigs = midi.timeSignatures.isEmpty ? [(tick: 0, num: 4, den: 4)] : midi.timeSignatures
+        var tick = 0, si = 0, beatInBar = 0
+        while tick <= midi.endTick {
+            while si + 1 < sigs.count && sigs[si + 1].tick <= tick { si += 1; beatInBar = 0 }
+            let num = max(1, sigs[si].num)
+            beats.append((midi.seconds(atTick: tick), beatInBar == 0))
+            beatInBar = (beatInBar + 1) % num
+            tick += max(1, midi.ppq * 4 / max(1, sigs[si].den))
+        }
+        let bpb = max(1, midi.mainTimeSignature.num > 6 ? midi.mainTimeSignature.num / 3 : (midi.mainTimeSignature.num == 6 ? 2 : midi.mainTimeSignature.num))
+        let beatDur = beats.count > 1 ? beats[1].time - beats[0].time : 0.5
+        var pre: [(time: Double, accent: Bool)] = []
+        for i in 0..<bpb { pre.append((-Double(bpb - i) * beatDur, i == 0)) }
         withLock {
+            clicks = pre + beats
+            clickIndex = 0
+            beatsPerBar = bpb
+            firstBeat = beatDur
             _playing = false
             events = evs
             duration = midi.duration
@@ -148,6 +173,23 @@ final class MIDISequencer {
     }
 
     func play() { withLock { _playing = true; endNotified = false } }
+
+    /// Parte con una battuta di conteggio (pre-count) se il brano è all'inizio.
+    func playWithCount() {
+        withLock {
+            if _position < 0.05 && pendingSeek == nil {
+                _position = -Double(beatsPerBar) * firstBeat
+                index = 0
+                clickIndex = 0
+            }
+            _playing = true; endNotified = false
+        }
+    }
+
+    var metronome: Bool {
+        get { withLock { _metronome } }
+        set { withLock { _metronome = newValue } }
+    }
     func pause() {
         withLock { _playing = false }
         synth.allSoundOff()
@@ -195,6 +237,9 @@ final class MIDISequencer {
             }
             index = i
             _position = s
+            var c = 0
+            while c < clicks.count && clicks[c].time < s { c += 1 }
+            clickIndex = c
         }
         guard _playing else { return }
         let dt = Double(frames) / sampleRate * speed
@@ -204,6 +249,14 @@ final class MIDISequencer {
             let off = UInt32(max(0, min(Double(frames - 1), (e.time - _position) / speed * sampleRate)))
             dispatch(e, offset: off)
             index += 1
+        }
+        while clickIndex < clicks.count && clicks[clickIndex].time < end {
+            let c = clicks[clickIndex]
+            if c.time >= _position && (c.time < 0 || _metronome) {
+                let off = UInt32(max(0, min(Double(frames - 1), (c.time - _position) / speed * sampleRate)))
+                synth.send(0x99, c.accent ? 76 : 77, c.accent ? 118 : 88, offset: off)
+            }
+            clickIndex += 1
         }
         _position = end
         if index >= events.count && _position > duration + tail && !endNotified {

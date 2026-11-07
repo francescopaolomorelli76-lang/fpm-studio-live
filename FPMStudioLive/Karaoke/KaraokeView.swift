@@ -62,7 +62,7 @@ struct KaraokeView: View {
                 Spacer()
                 Toggle("Accordi", isOn: $settings.showChords).toggleStyle(.switch)
                 Button(action: { showEditor = true }) { Label("Testo e accordi", systemImage: "text.badge.plus") }
-                    .buttonStyle(NeonButtonStyle(prominent: false)).disabled(player.item == nil)
+                    .buttonStyle(NeonButtonStyle(prominent: false)).disabled(player.item == nil || settings.showLock)
                 Button(action: { external.toggle(player: player) }) {
                     Label(external.isOpen ? "Chiudi schermo" : "Schermo esterno", systemImage: "tv")
                 }.buttonStyle(NeonButtonStyle(prominent: external.isOpen))
@@ -91,7 +91,6 @@ struct TransportPanel: View {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 30)
                 }
                 .buttonStyle(NeonButtonStyle())
-                .keyboardShortcut(.space, modifiers: [])
                 Button(action: { player.stop() }) { Image(systemName: "stop.fill") }.buttonStyle(NeonButtonStyle(prominent: false))
                 Button(action: { player.skip(5) }) { Image(systemName: "goforward.5") }.buttonStyle(NeonButtonStyle(prominent: false))
                 Button(action: { player.playNextNow() }) { Image(systemName: "forward.end.fill") }.buttonStyle(NeonButtonStyle(prominent: false)).help("Brano successivo della scaletta")

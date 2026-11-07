@@ -3,7 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case karaoke, dj, piano, ai
+    case karaoke, dj, piano, ai, advanced
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -11,6 +11,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .dj: return "DJ Automix"
         case .piano: return "Piano Studio"
         case .ai: return "AI Studio"
+        case .advanced: return "Funzioni avanzate"
         }
     }
     var icon: String {
@@ -19,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .dj: return "dial.max"
         case .piano: return "pianokeys"
         case .ai: return "wand.and.stars"
+        case .advanced: return "slider.horizontal.3"
         }
     }
 }
@@ -30,6 +32,13 @@ struct ContentView: View {
     @EnvironmentObject var mic: MicEngine
     @EnvironmentObject var piano: PianoStudioModel
     @EnvironmentObject var ai: AIStudioModel
+    @EnvironmentObject var sampler: SamplerEngine
+    @EnvironmentObject var multitrack: MultitrackPlayer
+    @EnvironmentObject var medley: MedleyCreator
+    @EnvironmentObject var background: BackgroundMusic
+    @EnvironmentObject var web: WebMonitor
+    @EnvironmentObject var recorder: VoiceRecorder
+    @EnvironmentObject var shortcuts: ShortcutManager
     @State private var section: AppSection = .karaoke
     @State private var showLibrary = true
 
@@ -47,6 +56,8 @@ struct ContentView: View {
                     case .dj: DJView(dj: dj, library: library)
                     case .piano: PianoStudioView(model: piano)
                     case .ai: AIStudioView(model: ai, player: player, library: library) { section = .karaoke }
+                    case .advanced: AdvancedView(player: player, sampler: sampler, multitrack: multitrack, medley: medley,
+                                                 background: background, web: web, recorder: recorder, shortcuts: shortcuts)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,7 +68,14 @@ struct ContentView: View {
         .foregroundColor(Theme.ink)
         .preferredColorScheme(.dark)
         .frame(minWidth: 1180, minHeight: 760)
-        .onAppear { player.library = library }
+        .onAppear {
+            player.library = library
+            shortcuts.player = player
+            shortcuts.install()
+            web.player = player
+            background.bind(to: player)
+            player.onPlaySample = { [weak s = sampler] slot in s?.trigger(slot) }
+        }
     }
 
     private var header: some View {

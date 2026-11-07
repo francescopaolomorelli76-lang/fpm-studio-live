@@ -41,6 +41,23 @@ final class KaraokePlayer: ObservableObject {
     @Published private(set) var midi: MIDIFile?
     @Published private(set) var melodyChannel: Int?
 
+    // Funzioni avanzate: marker, loop, eventi, leggio, metronomo, volume brano.
+    @Published var markers: [SongMarker] = []
+    @Published var events: [LiveEvent] = []
+    @Published var activeLoop: UUID?
+    @Published var loopRemaining = 0
+    @Published var banner: String?
+    @Published var documentURL: URL?
+    @Published var pdfPage = 1
+    @Published var metronome = false { didSet { hub.sequencer.metronome = metronome } }
+    @Published var precount = false
+    @Published var songVolume = 1.0 { didSet { hub.karaokeMixer.outputVolume = Float(songVolume) } }
+    @Published private(set) var bassChannels: Set<Int> = []
+    var lastEventTime = 0.0
+    var fadeTimer: Timer?
+    /// Chiamato dagli eventi CUSTOM SAMPLE (slot 1…100).
+    var onPlaySample: ((Int) -> Void)?
+
     weak var library: Library?
     let clock = PlaybackClock()
     var position: Double {
@@ -79,6 +96,7 @@ final class KaraokePlayer: ObservableObject {
         lyrics = KaraokeLyrics(); chords = []; sections = []; channels = []; keyName = ""; bpm = nil
         videoPlayer = nil; midi = nil; melodyChannel = nil
         let sidecar = SongSidecar.load(for: item.url)
+        loadAdvanced(sidecar, for: item.url)
         lyricsOffset = sidecar?.lyricsOffset ?? 0
         do {
             switch item.kind {
@@ -92,6 +110,7 @@ final class KaraokePlayer: ObservableObject {
                 if lyrics.title == nil { lyrics.title = item.title }
                 let an = ChordEngine.analyze(m, lyrics: lyrics, melodyOverride: sidecar?.melodyChannel)
                 melodyChannel = an.melodyChannel
+                bassChannels = an.bassChannels
                 chords = sidecar?.chords ?? (lyrics.chordEvents.isEmpty ? ChordEngine.events(an.regions, midi: m) : lyrics.chordEvents)
                 keyName = KeyDetector.name(root: an.key.root, minor: an.key.minor, notation: settings.notation)
                 sections = sidecar?.sections ?? SongStructureAnalyzer.analyze(
@@ -169,7 +188,7 @@ final class KaraokePlayer: ObservableObject {
         hub.start()
         advanceWork?.cancel(); countdownToNext = nil
         switch k {
-        case .midi: hub.sequencer.play()
+        case .midi: precount ? hub.sequencer.playWithCount() : hub.sequencer.play()
         case .audio: fileAudio.play()
         case .video:
             if videoUsesOwnAudio { videoPlayer?.rate = Float(tempo) } else { fileAudio.play(); videoPlayer?.rate = Float(tempo) }
@@ -197,6 +216,7 @@ final class KaraokePlayer: ObservableObject {
         videoPlayer?.seek(to: .zero)
         isPlaying = false
         position = 0
+        resyncEvents(at: 0)
     }
 
     func seek(to t: Double) {
@@ -210,6 +230,7 @@ final class KaraokePlayer: ObservableObject {
         case .none: break
         }
         position = s
+        resyncEvents(at: s)
     }
 
     func skip(_ delta: Double) { seek(to: position + delta) }
@@ -223,6 +244,7 @@ final class KaraokePlayer: ObservableObject {
 
     private func tick() {
         guard let k = kind else { return }
+        defer { advancedTick() }
         switch k {
         case .midi: position = hub.sequencer.position
         case .audio: position = fileAudio.position
@@ -315,6 +337,9 @@ final class KaraokePlayer: ObservableObject {
         s.defaultTranspose = transpose
         s.defaultTempo = tempo
         s.melodyChannel = melodyChannel
+        s.markers = markers.isEmpty ? nil : markers
+        s.events = events.isEmpty ? nil : events
+        s.documentPath = documentURL?.path
         do { try s.save(for: it.url); status = "Testo, accordi e struttura salvati" }
         catch { status = "Salvataggio non riuscito: \(error.localizedDescription)" }
     }

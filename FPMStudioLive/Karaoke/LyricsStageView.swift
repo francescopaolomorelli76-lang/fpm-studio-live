@@ -29,6 +29,14 @@ struct LyricsStageView: View {
                     Image("Logo").resizable().scaledToFit().opacity(0.07).padding(geo.size.height * 0.08)
                 }
                 content(size: geo.size)
+                if let b = player.banner, !b.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text(b).font(.system(size: max(18, geo.size.width / 36), weight: .heavy)).foregroundColor(.white)
+                            .padding(.vertical, 10).frame(maxWidth: .infinity)
+                            .background(Theme.gradient)
+                    }
+                }
             }
         }
         .clipped()
