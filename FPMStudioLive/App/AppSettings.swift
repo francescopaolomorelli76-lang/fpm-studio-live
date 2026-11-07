@@ -39,10 +39,15 @@ final class AppSettings: ObservableObject {
         synthPluginName = d.string(forKey: "synthPluginName") ?? ""
     }
 
-    var soundFontURL: URL? { soundFontPath.isEmpty ? nil : URL(fileURLWithPath: soundFontPath) }
+    /// SoundFont incluso nell'app (GeneralUser GS): usato quando l'utente non ne sceglie un altro.
+    static var bundledSoundFont: URL? { Bundle.main.url(forResource: "GeneralUser-GS", withExtension: "sf2", subdirectory: "SoundFonts")
+        ?? Bundle.main.url(forResource: "GeneralUser-GS", withExtension: "sf2") }
+
+    var soundFontURL: URL? { soundFontPath.isEmpty ? AppSettings.bundledSoundFont : URL(fileURLWithPath: soundFontPath) }
+    var effectiveSoundFontPath: String { soundFontURL?.path ?? "" }
     var soundFontName: String {
         if !synthPluginID.isEmpty { return synthPluginName + " (plugin)" }
-        return soundFontPath.isEmpty ? "Suoni di sistema Apple" : URL(fileURLWithPath: soundFontPath).deletingPathExtension().lastPathComponent
+        return soundFontPath.isEmpty ? (AppSettings.bundledSoundFont != nil ? "GeneralUser GS (incluso)" : "Suoni di sistema Apple") : URL(fileURLWithPath: soundFontPath).deletingPathExtension().lastPathComponent
     }
 
     /// Cerca automaticamente SoundFont nelle cartelle più comuni (anche quelle copiate da Win Live).

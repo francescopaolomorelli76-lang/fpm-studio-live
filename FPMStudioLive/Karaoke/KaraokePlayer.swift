@@ -77,7 +77,7 @@ final class KaraokePlayer: ObservableObject {
 
     init() {
         hub.start()
-        if !settings.soundFontPath.isEmpty { _ = hub.loadSoundBank(path: settings.soundFontPath) }
+        _ = hub.loadSoundBank(path: settings.effectiveSoundFontPath)
         if !settings.synthPluginID.isEmpty { usePlugin(id: settings.synthPluginID, name: settings.synthPluginName) }
         hub.synthReverb.wetDryMix = Float(settings.synthReverb)
         AudioHub.configureSynthEQ(hub.synthEQ, enabled: settings.synthEQ)
@@ -445,8 +445,7 @@ final class KaraokePlayer: ObservableObject {
     func reloadSoundFont() {
         settings.synthPluginID = ""
         useSoundFont()
-        if settings.soundFontPath.isEmpty { status = "Suoni di sistema Apple"; return }
-        status = hub.loadSoundBank(path: settings.soundFontPath) ? "SoundFont caricato: \(settings.soundFontName)" : "SoundFont non valido"
+        status = hub.loadSoundBank(path: settings.effectiveSoundFontPath) ? "SoundFont caricato: \(settings.soundFontName)" : "SoundFont non valido"
     }
 
     /// Accordi trasposti per la visualizzazione.

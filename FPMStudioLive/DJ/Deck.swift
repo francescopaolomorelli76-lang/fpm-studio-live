@@ -12,7 +12,7 @@ enum MIDIRenderCache {
         if FileManager.default.fileExists(atPath: out.path) { return out }
         let midi = try MIDIFile(url: midiURL)
         var s = OfflineRenderer.Settings()
-        s.soundBank = soundBank.isEmpty ? nil : URL(fileURLWithPath: soundBank)
+        s.soundBank = soundBank.isEmpty ? AppSettings.bundledSoundFont : URL(fileURLWithPath: soundBank)
         var audio = try OfflineRenderer.render(midi, settings: s) { progress($0 * 0.85) }
         Mastering.master(&audio.left, &audio.right, sr: audio.sampleRate, mode: .natural, applyEQ: false)
         try AudioExporter.write(audio, to: out, format: .wav) { progress(0.85 + $0 * 0.15) }

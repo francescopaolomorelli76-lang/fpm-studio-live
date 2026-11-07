@@ -221,7 +221,7 @@ struct SettingsView: View {
                         Text(settings.soundFontName).bold()
                         Spacer()
                         Button("Scegli .sf2…") { chooseSF2() }
-                        Button("Suoni Apple") { settings.soundFontPath = ""; player.reloadSoundFont() }
+                        Button("Suoni inclusi (GeneralUser GS)") { settings.soundFontPath = ""; player.reloadSoundFont() }
                     }
                     HStack {
                         Button(searching ? "Cerco…" : "Cerca SoundFont sul Mac") { search() }.disabled(searching)

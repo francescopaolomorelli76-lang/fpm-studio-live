@@ -22,7 +22,7 @@ final class SoundFontStore: ObservableObject {
                        detail: "Il modulo GS originale Roland su cui sono programmate quasi tutte le basi MIDI karaoke. Plugin Audio Unit: dopo l'installazione sceglilo in \"Strumento professionale\".",
                        size: "—", license: "Commerciale (Roland Cloud)", downloadURLs: [],
                        page: URL(string: "https://www.roland.com/global/products/rc_sound_canvas_va/")!, fileName: ""),
-        SoundFontOffer(id: "generaluser", name: "GeneralUser GS",
+        SoundFontOffer(id: "generaluser", name: "GeneralUser GS 2.0.3 (incluso nell'app)",
                        detail: "SoundFont GM/GS curatissimo e leggero, ottimo bilanciamento tra gli strumenti: ideale per un Mac Intel.",
                        size: "≈ 30 MB", license: "Gratuito, anche per uso commerciale (S. Christian Collins)",
                        downloadURLs: [URL(string: "https://github.com/mrbumpy409/GeneralUser-GS/raw/main/GeneralUser-GS.sf2")!],
@@ -51,6 +51,7 @@ final class SoundFontStore: ObservableObject {
     }
 
     func installedURL(_ o: SoundFontOffer) -> URL? {
+        if o.id == "generaluser", let b = AppSettings.bundledSoundFont { return b }   // già incluso nell'app
         guard !o.fileName.isEmpty else { return nil }
         let u = folder.appendingPathComponent(o.fileName)
         return FileManager.default.fileExists(atPath: u.path) ? u : nil

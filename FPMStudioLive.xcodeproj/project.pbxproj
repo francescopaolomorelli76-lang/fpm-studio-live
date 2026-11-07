@@ -48,6 +48,8 @@
 		93004BF1CF424E873F9EA978 /* PianoStudio.swift */ = {isa = PBXBuildFile; fileRef = 59C1F4D589C4F1C66E15BC9E; };
 		88894F09A289E78A3422FC5A /* Assets.xcassets */ = {isa = PBXBuildFile; fileRef = 916E20BBABFDEEC3E7628E29; };
 		D287F5D9E349243FF4AA39DF /* lame.min.js */ = {isa = PBXBuildFile; fileRef = 44F4A62B7E5DE2669A730966; };
+		E0BBFA649AC512052B055E2A /* GeneralUser-GS-LICENZA.txt */ = {isa = PBXBuildFile; fileRef = 01D358C8B4CF744DF48E09C3; };
+		1508E66F24A700F6004B905A /* GeneralUser-GS.sf2 */ = {isa = PBXBuildFile; fileRef = C42A383AAC09FA4D143CCBA5; };
 		05EA1AF1D11A980D1453D825 /* MainViews.swift */ = {isa = PBXBuildFile; fileRef = 832A74FF31D5D92C19C3FC4A; };
 /* End PBXBuildFile section */
 
@@ -96,6 +98,8 @@
 		17DEC090E3D08931AE1CC1A6 /* FPMStudioLive.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "FPMStudioLive.entitlements"; sourceTree = "<group>"; };
 		F2A37A33F5493F20F8BDE8A1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		44F4A62B7E5DE2669A730966 /* lame.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "lame.min.js"; sourceTree = "<group>"; };
+		01D358C8B4CF744DF48E09C3 /* GeneralUser-GS-LICENZA.txt */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GeneralUser-GS-LICENZA.txt"; sourceTree = "<group>"; };
+		C42A383AAC09FA4D143CCBA5 /* GeneralUser-GS.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GeneralUser-GS.sf2"; sourceTree = "<group>"; };
 		832A74FF31D5D92C19C3FC4A /* MainViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MainViews.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -187,7 +191,12 @@
 				17DEC090E3D08931AE1CC1A6,
 				F2A37A33F5493F20F8BDE8A1,
 				44F4A62B7E5DE2669A730966,
+				F562CC4359A464FD776E0B5B,
 			); path = "Resources"; sourceTree = "<group>"; };
+		F562CC4359A464FD776E0B5B /* SoundFonts */ = {isa = PBXGroup; children = (
+				01D358C8B4CF744DF48E09C3,
+				C42A383AAC09FA4D143CCBA5,
+			); path = "SoundFonts"; sourceTree = "<group>"; };
 		96D7D5659D1003A0F191DD67 /* UI */ = {isa = PBXGroup; children = (
 				832A74FF31D5D92C19C3FC4A,
 			); path = "UI"; sourceTree = "<group>"; };
@@ -217,6 +226,8 @@
 		55B558C7EF820E6E00E5993B = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
 				88894F09A289E78A3422FC5A,
 				D287F5D9E349243FF4AA39DF,
+				E0BBFA649AC512052B055E2A,
+				1508E66F24A700F6004B905A,
 			); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 

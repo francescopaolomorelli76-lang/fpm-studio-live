@@ -28,12 +28,14 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, SRC)):
             files.append((rel, "assets"))
         elif f.endswith(".js"):
             files.append((rel, "js"))
+        elif f.endswith(".sf2") or f.endswith("LICENZA.txt"):
+            files.append((rel, "res"))
         elif f == "Info.plist":
             files.append((rel, "plist"))
         elif f.endswith(".entitlements"):
             files.append((rel, "entitlements"))
 
-ftype = {"swift": "sourcecode.swift", "assets": "folder.assetcatalog", "js": "sourcecode.javascript",
+ftype = {"res": "file", "swift": "sourcecode.swift", "assets": "folder.assetcatalog", "js": "sourcecode.javascript",
          "plist": "text.plist.xml", "entitlements": "text.plist.entitlements"}
 
 # Gruppi
@@ -66,7 +68,7 @@ w("// !$*UTF8*$!\n{\n\tarchiveVersion = 1;\n\tclasses = {\n\t};\n\tobjectVersion
 
 w("\n/* Begin PBXBuildFile section */\n")
 for rel, kind in files:
-    if kind in ("swift", "assets", "js"):
+    if kind in ("swift", "assets", "js", "res"):
         w(f"\t\t{uid('build', rel)} /* {os.path.basename(rel)} */ = {{isa = PBXBuildFile; fileRef = {uid('file', rel)}; }};\n")
 w("/* End PBXBuildFile section */\n")
 
@@ -105,7 +107,7 @@ w(f"\t\t{project} /* Project object */ = {{isa = PBXProject; attributes = {{Buil
 w("/* End PBXProject section */\n")
 
 w("\n/* Begin PBXResourcesBuildPhase section */\n")
-res = "".join(f"\t\t\t\t{uid('build', rel)},\n" for rel, k in files if k in ("assets", "js"))
+res = "".join(f"\t\t\t\t{uid('build', rel)},\n" for rel, k in files if k in ("assets", "js", "res"))
 w(f"\t\t{res_phase} = {{isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (\n{res}\t\t\t); runOnlyForDeploymentPostprocessing = 0; }};\n")
 w("/* End PBXResourcesBuildPhase section */\n")
 

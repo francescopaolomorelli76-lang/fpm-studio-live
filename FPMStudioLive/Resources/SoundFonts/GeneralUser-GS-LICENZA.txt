@@ -1,0 +1,6 @@
+GeneralUser GS 2.0.3 — SoundFont GM/GS di S. Christian Collins
+https://schristiancollins.com/generaluser.php
+
+Distribuito con FPM Studio Live secondo la licenza GeneralUser GS, che consente l'uso,
+anche commerciale, e la ridistribuzione del SoundFont. Tutti i diritti sui campioni
+restano ai rispettivi autori. Testo completo della licenza sul sito indicato sopra.
