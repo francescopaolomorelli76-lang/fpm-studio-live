@@ -127,10 +127,20 @@ final class KaraokePlayer: ObservableObject {
                 keyName = KeyDetector.name(root: an.key.root, minor: an.key.minor, notation: settings.notation)
                 sections = sidecar?.sections ?? SongStructureAnalyzer.analyze(
                     SongStructureAnalyzer.input(midi: m, lyrics: lyrics, chords: chords, melodyChannel: an.melodyChannel))
+                // Nome di ogni canale: il nome della sua traccia solo se è davvero sua (formato 1, traccia con un solo
+                // canale, nome diverso dal titolo); altrimenti lo strumento General MIDI. Mai il titolo del brano.
+                let titleKeys = Set([m.title, lyrics.title, item.title].compactMap { $0?.lowercased().trimmingCharacters(in: .whitespaces) })
                 channels = m.usedChannels.map { ch in
                     let prog = m.programs[ch] ?? 0
-                    let trackName = m.notes.first { $0.channel == ch }.flatMap { m.trackNames[$0.track] } ?? ""
-                    let name = ch == 9 ? "Batteria" : (trackName.isEmpty ? GM.name(prog) : trackName)
+                    var trackName = ""
+                    if m.format == 1, let tr = m.notes.first(where: { $0.channel == ch })?.track,
+                       Set(m.notes.filter { $0.track == tr }.map { $0.channel }).count == 1,
+                       let n = m.trackNames[tr]?.trimmingCharacters(in: .whitespaces), !n.isEmpty,
+                       !titleKeys.contains(n.lowercased()), n.count <= 24 {
+                        trackName = n
+                    }
+                    let gm = ch == 9 ? "Batteria" : GM.name(prog)
+                    let name = trackName.isEmpty || trackName.lowercased() == gm.lowercased() ? gm : "\(trackName) · \(gm)"
                     return ChannelStrip(channel: ch, name: name, program: prog, isMelody: ch == an.melodyChannel)
                 }
             case .audio, .video:

@@ -165,5 +165,46 @@ extension KaraokePlayer {
     }
 
     func resetTempo() { tempo = 1 }
+
+    // MARK: Base MIDI → MP3 con tutte le modifiche
+
+    /// Crea un file audio della base MIDI così come la si sente ora: suoni scelti, tono, tempo,
+    /// tracce spente/soliste e volumi. Accanto salva il testo (.lrc e .fpm.json) già sincronizzato.
+    func exportCurrentMIDI(to url: URL, format: ExportFormat, mastering: Mastering.Mode, progress: @escaping (Double) -> Void,
+                           done: @escaping (Result<URL, Error>) -> Void) {
+        guard let m = midi else { return }
+        var s = OfflineRenderer.Settings()
+        s.soundBank = AppSettings.shared.soundFontURL
+        s.transpose = transpose
+        s.tempo = tempo
+        let anySolo = channels.contains { $0.solo }
+        s.muted = Set(channels.filter { $0.muted || (anySolo && !$0.solo) }.map { $0.channel })
+        s.gains = Dictionary(uniqueKeysWithValues: channels.map { ($0.channel, $0.gain) })
+        s.reverb = Float(AppSettings.shared.synthReverb)
+        s.eq = AppSettings.shared.synthEQ
+        let tempoNow = tempo
+        var lyr = lyrics
+        let chordList = chords
+        let sectionList = sections
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                var a = try OfflineRenderer.render(m, settings: s) { p in DispatchQueue.main.async { progress(p * 0.8) } }
+                Mastering.master(&a.left, &a.right, sr: a.sampleRate, mode: mastering, applyEQ: false)
+                try AudioExporter.write(a, to: url, format: format) { p in DispatchQueue.main.async { progress(0.8 + p * 0.2) } }
+                // Testo e accordi riportati alla nuova velocità.
+                for li in lyr.lines.indices { for si in lyr.lines[li].syllables.indices where lyr.lines[li].syllables[si].time >= 0 {
+                    lyr.lines[li].syllables[si].time /= tempoNow } }
+                if !lyr.isEmpty { try? lyr.lrc().write(to: url.deletingPathExtension().appendingPathExtension("lrc"), atomically: true, encoding: .utf8) }
+                var side = SongSidecar()
+                side.lyrics = lyr.isEmpty ? nil : lyr
+                side.chords = chordList.map { ChordEvent(time: $0.time / tempoNow, chord: $0.chord?.transposed(s.transpose)) }
+                side.sections = sectionList.map { var x = $0; x.start /= tempoNow; x.end /= tempoNow; return x }
+                try? side.save(for: url)
+                DispatchQueue.main.async { done(.success(url)) }
+            } catch {
+                DispatchQueue.main.async { done(.failure(error)) }
+            }
+        }
+    }
     func tempoStep(_ d: Double) { tempo = (tempo + d).clamped(0.6, 1.4) }
 }

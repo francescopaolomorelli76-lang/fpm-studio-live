@@ -37,6 +37,8 @@ final class PianoStudioModel: ObservableObject {
     @Published var status = ""
     @Published private(set) var chordSummary: [ChordEvent] = []
     @Published private(set) var previewing = false
+    @Published private(set) var playhead: Double = 0
+    private var playheadTimer: Timer?
     private(set) var generated: MIDIFile?
     private var lyrics: KaraokeLyrics?
     private var savedOnEnd: (() -> Void)?
@@ -92,7 +94,7 @@ final class PianoStudioModel: ObservableObject {
     // Anteprima nel lettore principale.
     func togglePreview() {
         let seq = AudioHub.shared.sequencer
-        if previewing { seq.pause(); previewing = false; seq.onEnd = savedOnEnd; return }
+        if previewing { seq.pause(); stopPreviewState(); seq.onEnd = savedOnEnd; return }
         guard let g = generate() else { return }
         savedOnEnd = seq.onEnd
         AudioHub.shared.start()
@@ -100,9 +102,25 @@ final class PianoStudioModel: ObservableObject {
         seq.setTranspose(transpose)
         seq.speed = tempo
         if let first = sections.first(where: { selected.contains($0.id) }), scope != .whole { seq.seek(to: first.start) }
-        seq.onEnd = { [weak self] in self?.previewing = false; seq.onEnd = self?.savedOnEnd }
+        seq.onEnd = { [weak self] in self?.stopPreviewState(); seq.onEnd = self?.savedOnEnd }
         seq.play()
         previewing = true
+        playheadTimer?.invalidate()
+        playheadTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            self?.playhead = AudioHub.shared.sequencer.position
+        }
+    }
+
+    private func stopPreviewState() {
+        previewing = false
+        playheadTimer?.invalidate()
+    }
+
+    /// Clic sulla barra della struttura: l'anteprima salta lì (e parte, se ferma).
+    func seekPreview(_ t: Double) {
+        if !previewing { togglePreview() }
+        AudioHub.shared.sequencer.seek(to: t)
+        playhead = t
     }
 
     func export() {
@@ -195,8 +213,16 @@ struct PianoStudioView: View {
                         Text("Nessun brano caricato").font(.caption).foregroundColor(Theme.soft)
                     } else {
                         if let m = model.midi {
-                            SectionStrip(sections: model.sections, duration: m.duration, position: AudioHub.shared.sequencer.position) { _ in }
-                                .frame(height: 24)
+                            SectionStrip(sections: model.sections, duration: m.duration, position: model.playhead) { model.seekPreview($0) }
+                                .frame(height: 28)
+                            HStack {
+                                Text(formatTime(model.playhead)).monospacedDigit()
+                                if let s = model.sections.last(where: { $0.start <= model.playhead + 0.01 }), model.previewing {
+                                    Text("▶ \(s.title)").bold().foregroundColor(Theme.cyan)
+                                }
+                                Spacer()
+                                Text(formatTime(m.duration)).monospacedDigit()
+                            }.font(.caption).foregroundColor(Theme.soft)
                         }
                         ScrollView {
                             VStack(spacing: 4) {

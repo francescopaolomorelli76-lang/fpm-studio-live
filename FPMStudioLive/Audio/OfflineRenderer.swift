@@ -46,6 +46,8 @@ enum OfflineRenderer {
         var transpose = 0
         var tempo = 1.0
         var muted: Set<Int> = []
+        /// Volume per canale (1 = originale), come nel mixer del karaoke.
+        var gains: [Int: Double] = [:]
         var sampleRate = 44100.0
         var reverb: Float = 14          // % del riverbero di sala aggiunto
         var eq = true
@@ -82,6 +84,7 @@ enum OfflineRenderer {
         seq.speed = settings.tempo
         seq.setTranspose(settings.transpose)
         for ch in settings.muted { seq.setMuted(ch, true) }
+        for (ch, g) in settings.gains where abs(g - 1) > 0.001 { seq.setGain(ch, g) }
         seq.tail = 0
         seq.play()
 

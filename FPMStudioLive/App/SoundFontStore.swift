@@ -40,6 +40,10 @@ final class SoundFontStore: ObservableObject {
                        size: "≈ 210 MB", license: "Gratuito (licenza MIT)",
                        downloadURLs: [URL(string: "https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General.sf2")!],
                        page: URL(string: "https://musescore.org/en/handbook/3/soundfonts-and-sfz-files")!, fileName: "MuseScore_General.sf2"),
+        SoundFontOffer(id: "zanderjaz", name: "Pacchetti SoundFont di zanderjaz.com",
+                       detail: "Raccolta di pacchetti SoundFont: scaricali dal browser, poi premi \"Cerca nei Download\" e l'app li installa da sola.",
+                       size: "vari", license: "Vedi le condizioni sul sito", downloadURLs: [],
+                       page: URL(string: "https://www.zanderjaz.com/downloads/soundfonts/packs/")!, fileName: ""),
         SoundFontOffer(id: "toh", name: "Timbres of Heaven",
                        detail: "SoundFont GM/GS molto ricco (batterie, chitarre, fiati), tra i più apprezzati per i MIDI karaoke. Pesante: meglio sull'M1.",
                        size: "≈ 400 MB", license: "Gratuito per uso personale (Don Allen)", downloadURLs: [],
@@ -146,6 +150,94 @@ final class SoundFontStore: ObservableObject {
         task?.resume()
     }
 
+    // MARK: Installazione di SoundFont scaricati dall'utente
+
+    /// Copia nella cartella dell'app i SoundFont scelti (.sf2/.dls, anche dentro .zip). Restituisce il riepilogo.
+    @discardableResult
+    func importFiles(_ urls: [URL]) -> (installed: [URL], notes: [String]) {
+        var installed: [URL] = [], notes: [String] = []
+        let fm = FileManager.default
+        for u in urls {
+            let ext = u.pathExtension.lowercased()
+            if ext == "zip" {
+                let tmp = fm.temporaryDirectory.appendingPathComponent("sf-" + UUID().uuidString)
+                try? fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+                p.arguments = ["-x", "-k", u.path, tmp.path]
+                do { try p.run(); p.waitUntilExit() } catch { notes.append("\(u.lastPathComponent): ZIP non apribile"); continue }
+                let inside = (fm.enumerator(at: tmp, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+                    .filter { !$0.path.contains("__MACOSX") && ["sf2", "dls", "sf3"].contains($0.pathExtension.lowercased()) }
+                if inside.isEmpty { notes.append("\(u.lastPathComponent): nessun SoundFont dentro lo ZIP") }
+                let r = importFiles(inside)
+                installed += r.installed; notes += r.notes
+                try? fm.removeItem(at: tmp)
+            } else if ext == "sf3" {
+                notes.append("\(u.lastPathComponent): formato SF3 compresso, il Mac legge solo SF2 (mandamelo e lo converto)")
+            } else if ext == "sf2" || ext == "dls" {
+                if ext == "sf2" && !Self.looksLikeSoundFont(u) { notes.append("\(u.lastPathComponent): non è un SoundFont valido"); continue }
+                let dest = folder.appendingPathComponent(u.lastPathComponent)
+                if dest.path != u.path {
+                    try? fm.removeItem(at: dest)
+                    do { try fm.copyItem(at: u, to: dest) } catch { notes.append("\(u.lastPathComponent): \(error.localizedDescription)"); continue }
+                }
+                installed.append(dest)
+            } else if ["rar", "7z"].contains(ext) {
+                notes.append("\(u.lastPathComponent): apri prima l'archivio con il Finder (doppio clic) e poi importa il .sf2")
+            }
+        }
+        message = installed.isEmpty ? (notes.first ?? "Nessun SoundFont trovato")
+            : "Installati \(installed.count) SoundFont: " + installed.map { $0.deletingPathExtension().lastPathComponent }.joined(separator: ", ")
+            + (notes.isEmpty ? "" : " · " + notes.joined(separator: " · "))
+        objectWillChange.send()
+        return (installed, notes)
+    }
+
+    /// Installa tutti i SoundFont presenti nella cartella Download (anche dentro gli ZIP).
+    @discardableResult
+    func importFromDownloads() -> [URL] {
+        let dl = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let files = ((try? FileManager.default.contentsOfDirectory(at: dl, includingPropertiesForKeys: nil)) ?? [])
+            .filter { ["sf2", "dls", "sf3", "zip"].contains($0.pathExtension.lowercased()) }
+        let zips = files.filter { $0.pathExtension.lowercased() == "zip" }.filter { z in
+            let list = Process(); let pipe = Pipe()
+            list.executableURL = URL(fileURLWithPath: "/usr/bin/zipinfo"); list.arguments = ["-1", z.path]; list.standardOutput = pipe
+            try? list.run(); list.waitUntilExit()
+            let names = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            return names.lowercased().contains(".sf2") || names.lowercased().contains(".dls")
+        }
+        let r = importFiles(files.filter { $0.pathExtension.lowercased() != "zip" } + zips)
+        if r.installed.isEmpty && r.notes.isEmpty { message = "Nella cartella Download non ci sono SoundFont (.sf2 o .zip con .sf2)" }
+        return r.installed
+    }
+
+    /// Scarica un SoundFont da un indirizzo incollato (file .sf2 o .zip).
+    func downloadFrom(_ url: URL, activate: @escaping (URL) -> Void) {
+        downloading = "url"; progress = 0; message = "Scarico \(url.lastPathComponent)…"
+        task = URLSession.shared.downloadTask(with: url) { [weak self] tmp, resp, err in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.downloading = nil
+                guard let tmp = tmp, ((resp as? HTTPURLResponse)?.statusCode ?? 0) < 400 else {
+                    self.message = "Download non riuscito: \(err?.localizedDescription ?? "indirizzo non valido")"; return
+                }
+                let named = FileManager.default.temporaryDirectory.appendingPathComponent(resp?.suggestedFilename ?? url.lastPathComponent)
+                try? FileManager.default.removeItem(at: named)
+                try? FileManager.default.moveItem(at: tmp, to: named)
+                var target = named
+                if !["sf2", "dls", "zip", "sf3"].contains(named.pathExtension.lowercased()) {
+                    target = named.appendingPathExtension(Self.looksLikeSoundFont(named) ? "sf2" : "zip")
+                    try? FileManager.default.moveItem(at: named, to: target)
+                }
+                if let first = self.importFiles([target]).installed.first { activate(first) }
+            }
+        }
+        observation = task?.progress.observe(\.fractionCompleted) { [weak self] p, _ in
+            DispatchQueue.main.async { self?.progress = p.fractionCompleted }
+        }
+        task?.resume()
+    }
+
     func cancel() { task?.cancel(); downloading = nil; message = "Download annullato" }
 
     /// Controllo che sia davvero un SoundFont (intestazione RIFF…sfbk) e non una pagina web.
@@ -237,12 +329,21 @@ struct SoundPickerMenu: View {
                 }
             }
             Divider()
-            Button("Scegli un file .sf2 dal Mac (es. Win Live)…") { chooseFile() }
+            Button("Installa i SoundFont scaricati (cartella Download)") {
+                if let first = store.importFromDownloads().first { use(first.path) }
+            }
+            Button("Importa SoundFont (.sf2 o .zip)…") { importFiles() }
+            Button("Scarica da un indirizzo web…") { askURL() }
+            Button("Apri il sito zanderjaz.com (pacchetti SoundFont)") {
+                NSWorkspace.shared.open(URL(string: "https://www.zanderjaz.com/downloads/soundfonts/packs/")!)
+            }
+            Button("Scegli un file .sf2 dal Mac senza copiarlo (es. Win Live)…") { chooseFile() }
         } label: {
             Label(store.downloading != nil ? "Scarico… \(Int(store.progress * 100))%" : "Suoni: \(settings.soundFontName)", systemImage: "pianokeys.inverse")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .help(store.message)
     }
 
     private func check(_ path: String) -> String {
@@ -253,6 +354,27 @@ struct SoundPickerMenu: View {
         settings.synthPluginID = ""
         settings.soundFontPath = path
         player.reloadSoundFont()
+    }
+
+    private func importFiles() {
+        let p = NSOpenPanel()
+        p.allowsMultipleSelection = true
+        p.allowedFileTypes = ["sf2", "dls", "zip", "sf3"]
+        p.message = "Scegli uno o più SoundFont (.sf2) o archivi .zip scaricati"
+        if p.runModal() == .OK, let first = store.importFiles(p.urls).installed.first { use(first.path) }
+    }
+
+    private func askURL() {
+        let a = NSAlert()
+        a.messageText = "Scarica un SoundFont"
+        a.informativeText = "Incolla l'indirizzo di un file .sf2 o .zip (tasto destro sul link di download → Copia link)."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
+        field.placeholderString = "https://…/nome.sf2"
+        a.accessoryView = field
+        a.addButton(withTitle: "Scarica")
+        a.addButton(withTitle: "Annulla")
+        guard a.runModal() == .alertFirstButtonReturn, let u = URL(string: field.stringValue.trimmingCharacters(in: .whitespaces)), u.scheme?.hasPrefix("http") == true else { return }
+        store.downloadFrom(u) { use($0.path) }
     }
 
     private func chooseFile() {

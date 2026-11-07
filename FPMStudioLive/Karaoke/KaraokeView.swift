@@ -11,6 +11,31 @@ struct KaraokeView: View {
     @State private var showEditor = false
     @State private var showMixer = true
     @State private var diagnostics: String?
+    @State private var exporting: Double?
+
+    private func exportMP3() {
+        let p = NSSavePanel()
+        let t = (player.item?.title ?? "Base") + (player.transpose != 0 ? " (\(player.transpose > 0 ? "+" : "")\(player.transpose))" : "")
+        p.nameFieldStringValue = t + ".mp3"
+        p.directoryURL = AppPaths.exports
+        guard p.runModal() == .OK, let u = p.url else { return }
+        let formats: [String: ExportFormat] = ["wav": .wav, "m4a": .m4a]
+        let format: ExportFormat = formats[u.pathExtension.lowercased()] ?? .mp3
+        let dest = format == .mp3 && u.pathExtension.lowercased() != "mp3" ? u.appendingPathExtension("mp3") : u
+        exporting = 0
+        player.status = "Creo l'MP3 con le tue modifiche…"
+        player.exportCurrentMIDI(to: dest, format: format, mastering: .pro, progress: { exporting = $0 }) { r in
+            exporting = nil
+            switch r {
+            case .success(let url):
+                player.status = "Salvato \(url.lastPathComponent) (con testo .lrc accanto)"
+                library.addFiles([url])
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            case .failure(let e):
+                player.status = "MP3 non creato: \(e.localizedDescription)"
+            }
+        }
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -18,7 +43,7 @@ struct KaraokeView: View {
                 LyricsStageView(player: player)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line, lineWidth: 1))
-                    .frame(minHeight: 300)
+                    .frame(minHeight: 180)
                 TransportPanel(player: player)
                 controls
                 HStack(alignment: .top) {
@@ -33,12 +58,14 @@ struct KaraokeView: View {
                 }
             }
             if showMixer {
-                VStack(spacing: 12) {
-                    if player.kind == .midi { MixerPanel(player: player) }
-                    MicPanel(mic: mic)
-                    SetlistPanel(player: player, library: library)
+                ScrollView {
+                    VStack(spacing: 12) {
+                        if player.kind == .midi { MixerPanel(player: player) }
+                        MicPanel(mic: mic)
+                        SetlistPanel(player: player, library: library)
+                    }
                 }
-                .frame(width: 300)
+                .frame(width: 290)
             }
         }
         .sheet(isPresented: $showEditor) { LyricsEditorView(player: player) }
@@ -65,7 +92,7 @@ struct KaraokeView: View {
 
     private var controls: some View {
         Panel {
-            HStack(spacing: 18) {
+            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("TONO").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.soft)
                     HStack {
@@ -89,6 +116,13 @@ struct KaraokeView: View {
                 }
                 Spacer()
                 SoundPickerMenu(player: player)
+                if player.kind == .midi {
+                    Button(action: exportMP3) {
+                        Label(exporting == nil ? "Crea MP3" : "MP3 \(Int((exporting ?? 0) * 100))%", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(NeonButtonStyle(prominent: false)).disabled(exporting != nil)
+                    .help("Salva la base così come la senti: suoni, tono, tempo, tracce spente e volumi")
+                }
                 Toggle("Accordi", isOn: $settings.showChords).toggleStyle(.switch)
                 Button(action: { showEditor = true }) { Label("Testo e accordi", systemImage: "text.badge.plus") }
                     .buttonStyle(NeonButtonStyle(prominent: false)).disabled(player.item == nil || settings.showLock)
@@ -96,7 +130,7 @@ struct KaraokeView: View {
                     Label(external.isOpen ? "Chiudi schermo" : "Schermo esterno", systemImage: "tv")
                 }.buttonStyle(NeonButtonStyle(prominent: external.isOpen))
                 Button(action: { withAnimation { showMixer.toggle() } }) { Image(systemName: "sidebar.right") }.buttonStyle(NeonButtonStyle(prominent: false))
-            }
+            } }
         }
     }
 }

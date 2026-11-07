@@ -69,7 +69,7 @@ struct ContentView: View {
         .background(Theme.background.ignoresSafeArea())
         .foregroundColor(Theme.ink)
         .preferredColorScheme(.dark)
-        .frame(minWidth: 1180, minHeight: 760)
+        .frame(minWidth: 960, minHeight: 600)
         .onAppear {
             player.library = library
             shortcuts.player = player
@@ -88,18 +88,18 @@ struct ContentView: View {
                 Text("Karaoke · DJ · Piano · AI").font(.system(size: 10, weight: .semibold)).tracking(1.5).foregroundColor(Theme.soft)
             }
             Spacer()
-            HStack(spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) {
                 ForEach(AppSection.allCases) { s in
                     Button(action: { section = s }) {
-                        Label(s.label, systemImage: s.icon).font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 8)
+                        Label(s.label, systemImage: s.icon).font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 11).padding(.vertical, 7)
                             .foregroundColor(section == s ? .white : Theme.soft)
                             .background(Group {
                                 if section == s { Capsule().fill(Theme.gradient) } else { Capsule().fill(Theme.bg2) }
                             })
                     }.buttonStyle(.plain)
                 }
-            }
+            } }
             Spacer()
             Button(action: { withAnimation { showLibrary.toggle() } }) { Image(systemName: "sidebar.left") }
                 .buttonStyle(NeonButtonStyle(prominent: false)).help("Mostra/nascondi archivio")
@@ -193,6 +193,15 @@ struct SettingsView: View {
                     SoundFontStoreView(store: sfStore) { u in
                         settings.soundFontPath = u.path
                         player.reloadSoundFont()
+                    }
+                    HStack {
+                        Button("Installa i SoundFont dalla cartella Download") {
+                            if let u = sfStore.importFromDownloads().first { settings.soundFontPath = u.path; player.reloadSoundFont() }
+                        }
+                        Button("Importa .sf2 / .zip…") {
+                            let p = NSOpenPanel(); p.allowsMultipleSelection = true; p.allowedFileTypes = ["sf2", "dls", "zip", "sf3"]
+                            if p.runModal() == .OK, let u = sfStore.importFiles(p.urls).installed.first { settings.soundFontPath = u.path; player.reloadSoundFont() }
+                        }
                     }
                 }
                 Section(header: Text("Strumento professionale (plugin Audio Unit)")) {
