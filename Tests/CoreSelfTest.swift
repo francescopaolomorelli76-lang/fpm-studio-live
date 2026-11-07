@@ -243,3 +243,29 @@ func runCoverageTest() {
     let plus = try! MIDIFile(data: PianoArranger(midi: midi, regions: an.regions, sections: [], options: o, bassChannels: an.bassChannels, melodyChannel: an.melodyChannel).arrange())
     print("Originale + piano: canali \(plus.usedChannels)")
 }
+
+func runFollowTest() {
+    // Usa il brano di prova della copertura: confronto gli attacchi del piano con quelli della base originale.
+    let ppq = 480, bar = ppq * 4
+    var w = MIDIWriter(ppq: ppq)
+    w.addTrack("T", [.init(tick: 0, bytes: MIDIWriter.tempo(bpm: 92)), .init(tick: bar * 6, bytes: MIDIWriter.tempo(bpm: 104))])
+    var gtr: [MIDIWriter.TrackEvent] = [.init(tick: 0, bytes: [0xC1, 25])], bass: [MIDIWriter.TrackEvent] = [.init(tick: 0, bytes: [0xC2, 33])]
+    let prog = [0, 9, 5, 7]
+    for b in 0..<12 {
+        let r = prog[b % 4], minor = r == 9
+        // comping sincopato: colpi a 0, 1.5, 3 (in quarti)
+        for off in [0, ppq * 3 / 2, ppq * 3] {
+            for x in (minor ? [0, 3, 7] : [0, 4, 7]) { gtr += [.init(tick: b * bar + off, bytes: [0x91, UInt8(55 + (r + x) % 12), 80]), .init(tick: b * bar + off + ppq / 2, bytes: [0x81, UInt8(55 + (r + x) % 12), 0])] }
+        }
+        bass += [.init(tick: b * bar, bytes: [0x92, UInt8(36 + r), 90]), .init(tick: b * bar + ppq * 2 - 10, bytes: [0x82, UInt8(36 + r), 0]),
+                 .init(tick: b * bar + ppq * 2, bytes: [0x92, UInt8(43 + r), 90]), .init(tick: b * bar + bar - 10, bytes: [0x82, UInt8(43 + r), 0])]
+    }
+    w.addTrack("Chitarra", gtr); w.addTrack("Basso", bass)
+    let midi = try! MIDIFile(data: w.data())
+    let an = ChordEngine.analyze(midi, lyrics: nil)
+    let out = try! MIDIFile(data: PianoArranger(midi: midi, regions: an.regions, sections: [], options: PianoOptions(), bassChannels: an.bassChannels).arrange())
+    let origOn = Set(midi.notes.map { $0.startTick })
+    let pianoOn = Set(out.notes.filter { $0.channel == 0 }.map { $0.startTick / 4 * 4 })
+    let match = pianoOn.filter { p in origOn.contains { abs($0 - p) <= 8 } }.count
+    print("Segue l'originale: attacchi piano \(pianoOn.count), coincidenti con l'originale \(match); durata \(String(format: "%.2f", out.duration)) vs \(String(format: "%.2f", midi.duration)); tempi \(out.tempoMap.count) vs \(midi.tempoMap.count)")
+}

@@ -1,10 +1,11 @@
 import Foundation
 
 enum PianoStyle: String, CaseIterable, Identifiable, Codable {
-    case automatic, ballad, pop, arpeggio, sustained
+    case followOriginal, automatic, ballad, pop, arpeggio, sustained
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .followOriginal: return "Segue la base originale (stesso ritmo e struttura)"
         case .automatic: return "Automatico (per sezione)"
         case .ballad: return "Ballata"
         case .pop: return "Pop ritmico"
@@ -28,13 +29,13 @@ enum AccompanimentMode: String, CaseIterable, Identifiable, Codable {
 
 struct PianoOptions: Codable, Equatable {
     var mode: AccompanimentMode = .pianoFromChords
-    var style: PianoStyle = .automatic
+    var style: PianoStyle = .followOriginal
     var program: Int = 0                // 0 Gran coda, 1 Brillante, 4 Rhodes
     var simplifyToTriads: Bool = false
     var keepOriginalBass: Bool = false
     var keepOriginalDrums: Bool = false
     var humanize: Bool = true
-    var finalRitardando: Bool = true
+    var finalRitardando: Bool = false
     var dynamics: Double = 1.0          // 0.6 ... 1.3
 }
 
@@ -108,7 +109,7 @@ struct PianoArranger {
     }
 
     private func style(for kind: SectionKind) -> PianoStyle {
-        if options.style != .automatic { return options.style }
+        if options.style != .automatic && options.style != .followOriginal { return options.style }
         switch kind {
         case .intro, .outro: return .arpeggio
         case .verse: return .ballad
@@ -133,6 +134,7 @@ struct PianoArranger {
     }
 
     private func pianoEvents() -> [MIDIWriter.TrackEvent] {
+        if options.style == .followOriginal { return followingEvents() }
         let ch = UInt8(pianoChannel)
         var ev: [MIDIWriter.TrackEvent] = [
             .init(tick: 0, bytes: [0xB0 | ch, 0, 0]),
@@ -263,7 +265,7 @@ struct PianoArranger {
                         let dur = min(remaining, eighth * 2)
                         note(firstHit ? start : tt, dur, p, vel(dyn, accent: accent * (st == .ballad ? 0.78 : 0.82)))
                     }
-                case .pop, .automatic:
+                case .pop, .automatic, .followOriginal:
                     // Mano sinistra: ottave su 1 e 3, anticipo sul "e" del 4 nei ritornelli.
                     if firstHit || isDownbeat {
                         note(hitTick, min(remaining, pulse * 2 - eighth / 2), bassNote, vel(dyn, accent: 1.05))
@@ -290,6 +292,109 @@ struct PianoArranger {
                 t += eighth
             }
         }
+        return ev
+    }
+
+    /// Pianoforte che segue la base originale: la destra suona gli accordi negli stessi punti e con le stesse
+    /// durate degli strumenti di accompagnamento originali (arpeggi compresi), la sinistra suona la linea di basso
+    /// originale. Tempo, metrica e struttura restano identici al MIDI di partenza.
+    private func followingEvents() -> [MIDIWriter.TrackEvent] {
+        let ch = UInt8(pianoChannel)
+        var ev: [MIDIWriter.TrackEvent] = [
+            .init(tick: 0, bytes: [0xB0 | ch, 0, 0]), .init(tick: 0, bytes: [0xB0 | ch, 32, 0]),
+            .init(tick: 0, bytes: [0xC0 | ch, UInt8(options.program.clamped(0, 127))]),
+            .init(tick: 0, bytes: [0xB0 | ch, 7, 110]), .init(tick: 0, bytes: [0xB0 | ch, 10, 64]), .init(tick: 0, bytes: [0xB0 | ch, 91, 45])
+        ]
+        let chords = regions.compactMap { r -> (start: Int, end: Int, chord: Chord)? in
+            guard let c = r.chord else { return nil }
+            return (r.startTick, r.endTick, options.simplifyToTriads ? c.triad : c)
+        }
+        guard !chords.isEmpty else { return ev }
+        func chordIndex(at t: Int) -> Int? {
+            var lo = 0, hi = chords.count - 1, found: Int?
+            while lo <= hi { let m = (lo + hi) / 2; if chords[m].start <= t { found = m; lo = m + 1 } else { hi = m - 1 } }
+            if let f = found, t < chords[f].end { return f }
+            return found ?? 0
+        }
+        let grid = max(1, midi.ppq / 8)                 // trentaduesimi: tiene anche le sincopi
+        let q = { (t: Int) -> Int in Int((Double(t) / Double(grid)).rounded()) * grid }
+        let melody = melodyChannel
+        let harmonyNotes = midi.notes.filter { $0.channel != 9 && !bassChannels.contains($0.channel) && $0.channel != melody && $0.endTick > $0.startTick }
+        let bassNotes = midi.notes.filter { bassChannels.contains($0.channel) && $0.endTick > $0.startTick }
+
+        // Attacchi degli strumenti armonici, raggruppati per istante.
+        struct Hit { var count = 0; var vel = 0; var end = 0; var pcs: [Int] = [] }
+        var hits: [Int: Hit] = [:]
+        for n in harmonyNotes {
+            let t = q(n.startTick)
+            var h = hits[t] ?? Hit()
+            h.count += 1; h.vel = max(h.vel, n.velocity); h.end = max(h.end, n.endTick); h.pcs.append(n.pitch % 12)
+            hits[t] = h
+        }
+        let times = hits.keys.sorted()
+        var voicings: [Int: [Int]] = [:]
+        var prev = [60, 64, 67]
+        func voicing(_ i: Int) -> [Int] {
+            if let v = voicings[i] { return v }
+            let v = PianoArranger.voicing(for: chords[i].chord, previous: prev, rich: false, low: 55, high: 79)
+            voicings[i] = v; prev = v
+            return v
+        }
+        let dyn = options.dynamics
+        for (k, t) in times.enumerated() {
+            guard let ci = chordIndex(at: t), let h = hits[t] else { continue }
+            let c = chords[ci]
+            let v = voicing(ci)
+            let nextHit = k + 1 < times.count ? times[k + 1] : c.end
+            // Durata: come l'originale, ma senza superare il cambio d'accordo.
+            let end = min(max(h.end, t + grid), c.end, max(nextHit, t + grid) + midi.ppq * 4)
+            let dur = max(grid, end - t - 4)
+            let vel = UInt8((Double(h.vel) * 0.9 * dyn).rounded().clamped(25, 120))
+            let chordPcs = Set(c.chord.pitchClasses)
+            if h.count == 1 {
+                // Nota singola (arpeggio o riff): la nota dell'accordo corrispondente nel registro del piano.
+                let pc = h.pcs[0]
+                let target = chordPcs.contains(pc) ? pc : (v.first.map { $0 % 12 } ?? pc)
+                let note = v.first { $0 % 12 == target } ?? (60 + target)
+                ev.append(.init(tick: t, bytes: [0x90 | ch, UInt8(note), vel]))
+                ev.append(.init(tick: t + dur, bytes: [0x80 | ch, UInt8(note), 0]))
+            } else {
+                for (i, n) in v.enumerated() {
+                    ev.append(.init(tick: t + (options.humanize ? i * 2 : 0), bytes: [0x90 | ch, UInt8(n), vel]))
+                    ev.append(.init(tick: t + dur, bytes: [0x80 | ch, UInt8(n), 0]))
+                }
+            }
+        }
+        // Accordi senza attacchi armonici (solo basso/batteria): accordo tenuto al cambio.
+        for (i, c) in chords.enumerated() where !times.contains(where: { $0 >= c.start && $0 < c.end }) {
+            for n in voicing(i) {
+                ev.append(.init(tick: c.start, bytes: [0x90 | ch, UInt8(n), UInt8((70 * dyn).clamped(25, 120))]))
+                ev.append(.init(tick: max(c.start + grid, c.end - 4), bytes: [0x80 | ch, UInt8(n), 0]))
+            }
+        }
+        // Mano sinistra: la linea di basso originale, un'ottava sopra se troppo grave.
+        if !bassNotes.isEmpty {
+            for n in bassNotes {
+                var p = n.pitch
+                while p < 33 { p += 12 }
+                while p > 52 { p -= 12 }
+                ev.append(.init(tick: n.startTick, bytes: [0x90 | ch, UInt8(p), UInt8((Double(n.velocity) * 0.85 * dyn).rounded().clamped(25, 120))]))
+                ev.append(.init(tick: n.endTick, bytes: [0x80 | ch, UInt8(p), 0]))
+            }
+        } else {
+            for c in chords {
+                var p = 36 + (c.chord.bass ?? c.chord.root)
+                if p > 47 { p -= 12 }
+                ev.append(.init(tick: c.start, bytes: [0x90 | ch, UInt8(p), UInt8((78 * dyn).clamped(25, 120))]))
+                ev.append(.init(tick: max(c.start + grid, c.end - 4), bytes: [0x80 | ch, UInt8(p), 0]))
+            }
+        }
+        // Pedale cambiato a ogni accordo.
+        for c in chords {
+            ev.append(.init(tick: max(0, c.start - 2), bytes: [0xB0 | ch, 64, 0]))
+            ev.append(.init(tick: c.start + max(4, midi.ppq / 24), bytes: [0xB0 | ch, 64, 100]))
+        }
+        if let last = chords.last { ev.append(.init(tick: last.end + midi.ppq, bytes: [0xB0 | ch, 64, 0])) }
         return ev
     }
 
