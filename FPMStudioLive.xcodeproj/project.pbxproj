@@ -15,6 +15,7 @@
 		D892BA29746CD778AEF54CDA /* WebMonitor.swift */ = {isa = PBXBuildFile; fileRef = DE3C709087810D519F724724; };
 		9E6DD4DB5134B48B43C9C951 /* AppSettings.swift */ = {isa = PBXBuildFile; fileRef = 7A86BC60F559A58775C9390A; };
 		8F8C2DBDCFC8315FCCC5106F /* FPMStudioLiveApp.swift */ = {isa = PBXBuildFile; fileRef = B8DD9995155F1913BFF68302; };
+		1E21BA2435B83B76E32B0985 /* SoundFontStore.swift */ = {isa = PBXBuildFile; fileRef = B7A36DBDA67DA04EC2825593; };
 		40C628A595D2A024DEB8F5E7 /* Theme.swift */ = {isa = PBXBuildFile; fileRef = 5F825F35AF554CA25096CDA7; };
 		AB6549643CA9631546CEE298 /* AudioAnalyzer.swift */ = {isa = PBXBuildFile; fileRef = D4C55496D3DA09C5B5DC57E8; };
 		30E1537C3BCEE0188F39D01F /* AudioFilePlayer.swift */ = {isa = PBXBuildFile; fileRef = 983EBA12780DCECBF06626E7; };
@@ -60,6 +61,7 @@
 		DE3C709087810D519F724724 /* WebMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebMonitor.swift"; sourceTree = "<group>"; };
 		7A86BC60F559A58775C9390A /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSettings.swift"; sourceTree = "<group>"; };
 		B8DD9995155F1913BFF68302 /* FPMStudioLiveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FPMStudioLiveApp.swift"; sourceTree = "<group>"; };
+		B7A36DBDA67DA04EC2825593 /* SoundFontStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SoundFontStore.swift"; sourceTree = "<group>"; };
 		5F825F35AF554CA25096CDA7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Theme.swift"; sourceTree = "<group>"; };
 		D4C55496D3DA09C5B5DC57E8 /* AudioAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioAnalyzer.swift"; sourceTree = "<group>"; };
 		983EBA12780DCECBF06626E7 /* AudioFilePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioFilePlayer.swift"; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 		22EE43E5F9A80405E6DFEACD /* App */ = {isa = PBXGroup; children = (
 				7A86BC60F559A58775C9390A,
 				B8DD9995155F1913BFF68302,
+				B7A36DBDA67DA04EC2825593,
 				5F825F35AF554CA25096CDA7,
 			); path = "App"; sourceTree = "<group>"; };
 		C0371FE722F9C2F5935E1FD2 /* Audio */ = {isa = PBXGroup; children = (
@@ -227,6 +230,7 @@
 				D892BA29746CD778AEF54CDA,
 				9E6DD4DB5134B48B43C9C951,
 				8F8C2DBDCFC8315FCCC5106F,
+				1E21BA2435B83B76E32B0985,
 				40C628A595D2A024DEB8F5E7,
 				AB6549643CA9631546CEE298,
 				30E1537C3BCEE0188F39D01F,

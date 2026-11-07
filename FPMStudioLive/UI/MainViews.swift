@@ -182,12 +182,19 @@ struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     @EnvironmentObject var player: KaraokePlayer
     @State private var found: [URL] = []
+    @StateObject private var sfStore = SoundFontStore()
     @State private var plugins: [AVAudioUnitComponent] = GMSynth.installedInstruments()
     @State private var searching = false
 
     var body: some View {
         TabView {
-            Form {
+            ScrollView { Form {
+                Section(header: Text("Suoni professionali: scarica e usa")) {
+                    SoundFontStoreView(store: sfStore) { u in
+                        settings.soundFontPath = u.path
+                        player.reloadSoundFont()
+                    }
+                }
                 Section(header: Text("Strumento professionale (plugin Audio Unit)")) {
                     Text("Per il suono più fedele delle basi MIDI karaoke usa un modulo GM/GS professionale installato sul Mac, per esempio Roland Sound Canvas VA. Compaiono qui tutti gli strumenti Audio Unit installati.")
                         .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -234,7 +241,7 @@ struct SettingsView: View {
                     }
                     Toggle("EQ \"professionale\" sulle basi MIDI (bassi pieni, alti chiari)", isOn: $settings.synthEQ)
                 }
-            }
+            } }
             .padding()
             .tabItem { Label("Suoni", systemImage: "speaker.wave.3") }
 
@@ -257,7 +264,7 @@ struct SettingsView: View {
             .padding()
             .tabItem { Label("DJ e archivio", systemImage: "dial.max") }
         }
-        .frame(width: 640, height: 460)
+        .frame(width: 720, height: 620)
     }
 
     private func chooseSF2() {
