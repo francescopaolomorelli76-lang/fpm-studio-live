@@ -43,10 +43,17 @@ final class AppSettings: ObservableObject {
     static var bundledSoundFont: URL? { Bundle.main.url(forResource: "GeneralUser-GS", withExtension: "sf2", subdirectory: "SoundFonts")
         ?? Bundle.main.url(forResource: "GeneralUser-GS", withExtension: "sf2") }
 
-    var soundFontURL: URL? { soundFontPath.isEmpty ? AppSettings.bundledSoundFont : URL(fileURLWithPath: soundFontPath) }
+    /// Valore speciale di `soundFontPath`: suoni di sistema Apple (nessun SoundFont).
+    static let appleSounds = "apple"
+
+    var soundFontURL: URL? {
+        if soundFontPath == AppSettings.appleSounds { return nil }
+        return soundFontPath.isEmpty ? AppSettings.bundledSoundFont : URL(fileURLWithPath: soundFontPath)
+    }
     var effectiveSoundFontPath: String { soundFontURL?.path ?? "" }
     var soundFontName: String {
         if !synthPluginID.isEmpty { return synthPluginName + " (plugin)" }
+        if soundFontPath == AppSettings.appleSounds { return "Suoni di sistema Apple" }
         return soundFontPath.isEmpty ? (AppSettings.bundledSoundFont != nil ? "GeneralUser GS (incluso)" : "Suoni di sistema Apple") : URL(fileURLWithPath: soundFontPath).deletingPathExtension().lastPathComponent
     }
 

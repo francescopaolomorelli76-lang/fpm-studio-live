@@ -88,6 +88,7 @@ struct KaraokeView: View {
                     }.toggleStyle(.switch)
                 }
                 Spacer()
+                SoundPickerMenu(player: player)
                 Toggle("Accordi", isOn: $settings.showChords).toggleStyle(.switch)
                 Button(action: { showEditor = true }) { Label("Testo e accordi", systemImage: "text.badge.plus") }
                     .buttonStyle(NeonButtonStyle(prominent: false)).disabled(player.item == nil || settings.showLock)

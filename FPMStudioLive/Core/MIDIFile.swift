@@ -287,7 +287,11 @@ final class MIDIFile {
             let breaks = g.filter { $0.1.hasPrefix("/") || $0.1.hasPrefix("\\") || $0.1.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }.count
             return Double(distinct) + Double(min(breaks, 20)) * 0.5 + (k.hasPrefix("5-") ? 2 : 0)
         }
-        guard let best = groups.max(by: { score($0.key, $0.value) < score($1.key, $1.value) }), best.value.count >= 3 else { return lyrics }
+        guard let best = groups.max(by: { score($0.key, $0.value) < score($1.key, $1.value) }), best.value.count >= 3 else {
+            // Basi M-Live (le originali di Win Live): testo e accordi nei SysEx M-Live.
+            let ml = mLiveLyrics()
+            return ml.isEmpty ? lyrics : ml
+        }
         let source = best.value   // già in ordine di tempo (ordinamento stabile del parser)
 
         var line = LyricLine()
@@ -345,6 +349,70 @@ final class MIDIFile {
 }
 
 extension MIDIFile {
+    /// Messaggi SysEx M-Live (produttore 00 20 24): tipo e testo.
+    private func mLiveMessages() -> [(t: Double, type: UInt8, text: String)] {
+        var out: [(Double, UInt8, String)] = []
+        for e in events {
+            guard case .sysex(let d) = e.kind, d.count >= 5, d[0] == 0x00, d[1] == 0x20, d[2] == 0x24 else { continue }
+            var body = Array(d.dropFirst(5))
+            if body.last == 0xF7 { body.removeLast() }
+            let text = TextDecoding.decode(body.filter { $0 != 0x0A && $0 != 0x0D }).trimmingCharacters(in: .whitespaces)
+            out.append((seconds(atTick: e.tick), d[4], text))
+        }
+        return out.map { (t: $0.0, type: $0.1, text: $0.2) }
+    }
+
+    var hasMLiveData: Bool { !mLiveMessages().isEmpty }
+
+    /// Testo delle basi M-Live: le righe arrivano a "pagine" di 4 (tipi 04–07, mostrate in anticipo);
+    /// ogni messaggio di tipo 08 porta il canto alla riga successiva; le sillabe seguono poi la melodia.
+    func mLiveLyrics() -> KaraokeLyrics {
+        let msgs = mLiveMessages()
+        guard !msgs.isEmpty else { return KaraokeLyrics() }
+        var lyr = KaraokeLyrics()
+        let firstChord = msgs.first { $0.type == 0x01 }?.t ?? .infinity
+        // Intestazione (prima della musica): titolo e artista.
+        for m in msgs where m.t < min(firstChord, 1.0) && (0x04...0x07).contains(m.type) && !m.text.isEmpty {
+            let clean = m.text.trimmingCharacters(in: CharacterSet(charactersIn: "\"()"))
+            if m.type == 0x04, lyr.title == nil { lyr.title = clean }
+            else if m.type == 0x05, lyr.artist == nil { lyr.artist = clean }
+        }
+        // Righe in ordine di comparsa (dopo l'intestazione), e segnali di avanzamento.
+        var pending: [String] = []
+        var cues: [Double] = []
+        var pageBreaks: [Int] = []
+        for m in msgs where m.t >= min(firstChord, 1.0) || m.type == 0x08 {
+            switch m.type {
+            case 0x04...0x07:
+                if m.type == 0x04, !pending.isEmpty { pageBreaks.append(pending.count) }
+                if !m.text.isEmpty { pending.append(m.text) }
+            case 0x08:
+                if m.t >= min(firstChord, 1.0) - 0.5 { cues.append(m.t) }
+            default: break
+            }
+        }
+        // Se ci sono più segnali che righe, i primi sono il conteggio iniziale.
+        if cues.count > pending.count { cues.removeFirst(cues.count - pending.count) }
+        var t0 = msgs.first(where: { (0x04...0x07).contains($0.type) && $0.t >= min(firstChord, 1.0) })?.t ?? 0
+        for (i, text) in pending.enumerated() {
+            let t = i < cues.count ? cues[i] : t0 + 4
+            t0 = t
+            var line = LyricLine(syllables: [LyricSyllable(text: text, time: t)])
+            line.endsParagraph = pageBreaks.contains(i + 1)
+            lyr.lines.append(line)
+        }
+        alignWholeLinesToMelody(&lyr)
+        lyr.lines = lyr.lines.flatMap { KaraokeLyrics.splitLongLine($0, forceByPauses: false) }
+        return lyr
+    }
+
+    /// Accordi scritti nel file dal produttore (M-Live tipo 01, es. "Ebm", "Gb/Db").
+    func embeddedChords() -> [ChordEvent] {
+        mLiveMessages().filter { $0.type == 0x01 && !$0.text.isEmpty }.compactMap { m in
+            Chord.parse(m.text).map { ChordEvent(time: m.t, chord: $0) }
+        }
+    }
+
     /// Per le righe scritte in un solo evento: divido in sillabe e assegno a ciascuna l'attacco
     /// di una nota della melodia (traccia rilevata automaticamente) tra l'inizio di questa riga e la successiva.
     func alignWholeLinesToMelody(_ lyrics: inout KaraokeLyrics) {

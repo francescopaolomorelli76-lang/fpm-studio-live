@@ -33,9 +33,10 @@ enum LyricsSources {
                 if !l.isEmpty { return Found(lyrics: l, source: "file .\(ext.lowercased()) abbinato", synced: true) }
             }
         }
-        // 2. Tag ID3 dentro l'MP3.
-        if let d = try? Data(contentsOf: url, options: .mappedIfSafe), let id3 = ID3Lyrics.parse(d) {
-            return id3
+        // 2. Tag dentro l'MP3: ID3v2 (SYLT/USLT) oppure Lyrics3 in fondo al file (basi M-Live / Song Service).
+        if let d = try? Data(contentsOf: url, options: .mappedIfSafe) {
+            if let id3 = ID3Lyrics.parse(d) { return id3 }
+            if let l3 = Lyrics3.parse(d) { return l3 }
         }
         // 3. Testo semplice (non sincronizzato).
         for ext in ["txt", "TXT"] {
@@ -222,5 +223,75 @@ enum ID3Lyrics {
         if !line.syllables.isEmpty { l.lines.append(line) }
         l.lines = l.lines.flatMap { KaraokeLyrics.splitLongLine($0, forceByPauses: !hadBreaks) }
         return l
+    }
+}
+
+/// Tag Lyrics3 (v2 con tempi "[mm:ss]" nel campo LYR, oppure v1 senza tempi) in fondo all'MP3.
+enum Lyrics3 {
+    static func parse(_ d: Data) -> LyricsSources.Found? {
+        let n = d.count
+        guard n > 20 else { return nil }
+        // Il tag Lyrics3 sta prima dell'eventuale ID3v1 ("TAG", 128 byte).
+        var end = n
+        if n > 128, d[n - 128] == 0x54, d[n - 127] == 0x41, d[n - 126] == 0x47 { end = n - 128 }
+        guard end > 15 else { return nil }
+        let tail = String(decoding: d[(end - 9)..<end], as: UTF8.self)
+        var block: Data?
+        if tail == "LYRICS200", let size = Int(String(decoding: d[(end - 15)..<(end - 9)], as: UTF8.self)), size > 11, end - 15 - size >= 0 {
+            block = d[(end - 15 - size)..<(end - 15)]
+        } else if tail == "LYRICSEND" {
+            let searchFrom = max(0, end - 5100 - 9)
+            if let r = d[searchFrom..<end].range(of: Data("LYRICSBEGIN".utf8)) { block = d[r.lowerBound..<(end - 9)] }
+            if let b = block {
+                let text = String(data: b.dropFirst(11), encoding: .isoLatin1) ?? ""
+                let l = LyricsSources.unsynced(text)
+                return l.isEmpty ? nil : .init(lyrics: l.cleanedForKaraoke(), source: "tag Lyrics3 v1 (da sincronizzare)", synced: false)
+            }
+        }
+        guard let b = block, b.count > 11, b.prefix(11) == Data("LYRICSBEGIN".utf8) else { return nil }
+        var p = b.startIndex + 11
+        var lyrText: String?
+        while p + 8 <= b.endIndex {
+            let id = String(decoding: b[p..<(p + 3)], as: UTF8.self)
+            guard let len = Int(String(decoding: b[(p + 3)..<(p + 8)], as: UTF8.self)), p + 8 + len <= b.endIndex else { break }
+            let field = b[(p + 8)..<(p + 8 + len)]
+            if id == "LYR" { lyrText = String(data: field, encoding: .utf8) ?? String(data: field, encoding: .isoLatin1) }
+            p += 8 + len
+        }
+        guard let text = lyrText, !text.isEmpty else { return nil }
+        if text.range(of: #"\[\d{1,2}:\d{2}"#, options: .regularExpression) != nil {
+            let l = KaraokeLyrics.fromLRC(text).cleanedForKaraoke()
+            if !l.isEmpty { return .init(lyrics: l, source: "tag Lyrics3 sincronizzato (base M-Live)", synced: true) }
+        }
+        let l = LyricsSources.unsynced(text)
+        return l.isEmpty ? nil : .init(lyrics: l.cleanedForKaraoke(), source: "tag Lyrics3 (da sincronizzare)", synced: false)
+    }
+}
+
+extension KaraokeLyrics {
+    /// Toglie dal testo le righe che non si cantano (puntini di attesa, editori, sito, copyright)
+    /// e usa le prime righe tra virgolette/parentesi come titolo e artista.
+    func cleanedForKaraoke() -> KaraokeLyrics {
+        var out = self
+        var kept: [LyricLine] = []
+        for (i, l) in lines.enumerated() {
+            let t = l.text.trimmingCharacters(in: .whitespaces)
+            let lower = t.lowercased()
+            let letters = t.filter { $0.isLetter }
+            if letters.isEmpty { if let last = kept.indices.last { kept[last].endsParagraph = true }; continue }   // "......."
+            if lower.hasPrefix("www.") || lower.hasPrefix("http") || lower.contains("(c)") || lower.contains("©") || lower.contains("copyright")
+                || lower.contains("publishing") || lower.contains("edizioni") || lower.contains("all rights") { continue }
+            if i < 4 && t.hasPrefix("\"") && t.hasSuffix("\"") {
+                out.title = out.title ?? t.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                continue
+            }
+            if i < 4 && t.hasPrefix("(") && t.hasSuffix(")") {
+                out.artist = out.artist ?? String(t.dropFirst().dropLast())
+                continue
+            }
+            kept.append(l)
+        }
+        out.lines = kept
+        return out
     }
 }

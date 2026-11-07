@@ -175,6 +175,7 @@ final class PianoStudioModel: ObservableObject {
 
 struct PianoStudioView: View {
     @ObservedObject var model: PianoStudioModel
+    @EnvironmentObject var player: KaraokePlayer
     @ObservedObject var settings = AppSettings.shared
 
     var body: some View {
@@ -269,7 +270,7 @@ struct PianoStudioView: View {
                     Picker("Formato", selection: $model.format) { ForEach(ExportFormat.allCases) { Text($0.label).tag($0) } }
                     Picker("Parti", selection: $model.scope) { ForEach(PianoStudioModel.Scope.allCases) { Text($0.label).tag($0) } }
                     Picker("Mastering", selection: $model.mastering) { ForEach(Mastering.Mode.allCases) { Text($0.label).tag($0) } }
-                    Text("Suoni: \(settings.soundFontName)").font(.caption).foregroundColor(Theme.soft)
+                    SoundPickerMenu(player: player)
                     HStack {
                         Button(model.previewing ? "■ Ferma" : "▶ Ascolta") { model.togglePreview() }
                             .buttonStyle(NeonButtonStyle(prominent: false)).disabled(model.midi == nil)

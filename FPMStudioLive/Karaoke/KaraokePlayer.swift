@@ -122,7 +122,8 @@ final class KaraokePlayer: ObservableObject {
                 let an = ChordEngine.analyze(m, lyrics: lyrics, melodyOverride: sidecar?.melodyChannel)
                 melodyChannel = an.melodyChannel
                 bassChannels = an.bassChannels
-                chords = sidecar?.chords ?? (lyrics.chordEvents.isEmpty ? ChordEngine.events(an.regions, midi: m) : lyrics.chordEvents)
+                let embedded = m.embeddedChords()   // accordi scritti dal produttore (basi M-Live)
+                chords = sidecar?.chords ?? (!embedded.isEmpty ? embedded : (lyrics.chordEvents.isEmpty ? ChordEngine.events(an.regions, midi: m) : lyrics.chordEvents))
                 keyName = KeyDetector.name(root: an.key.root, minor: an.key.minor, notation: settings.notation)
                 sections = sidecar?.sections ?? SongStructureAnalyzer.analyze(
                     SongStructureAnalyzer.input(midi: m, lyrics: lyrics, chords: chords, melodyChannel: an.melodyChannel))
@@ -444,6 +445,12 @@ final class KaraokePlayer: ObservableObject {
 
     func reloadSoundFont() {
         settings.synthPluginID = ""
+        if settings.soundFontPath == AppSettings.appleSounds {
+            hub.useSynth(GMSynth())   // sintetizzatore pulito, senza banchi caricati
+            if let m = midi { hub.sequencer.load(m); applyMixerAfterReload() }
+            status = "Suoni: \(settings.soundFontName)"
+            return
+        }
         useSoundFont()
         status = hub.loadSoundBank(path: settings.effectiveSoundFontPath) ? "SoundFont caricato: \(settings.soundFontName)" : "SoundFont non valido"
     }
