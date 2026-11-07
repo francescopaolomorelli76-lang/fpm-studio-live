@@ -23,10 +23,12 @@
 		08CA720700C8558C03A832AB /* Mastering.swift */ = {isa = PBXBuildFile; fileRef = 8F140C130442484862EF5EFC; };
 		8A941AB3D2D76464E4B8B621 /* MicEngine.swift */ = {isa = PBXBuildFile; fileRef = D0E456BA6FA68C3660ED236C; };
 		2F62514B110669242B7FFD0E /* OfflineRenderer.swift */ = {isa = PBXBuildFile; fileRef = E0A636DBFC3F223E732D4DFD; };
+		FB1AE0D81BBF2E6588167073 /* CDG.swift */ = {isa = PBXBuildFile; fileRef = 3F68FA4ED2C6EB6535CDDAB0; };
 		304AF6FF922E55EC92BE272C /* Chord.swift */ = {isa = PBXBuildFile; fileRef = 586C48A1E73175CB24E1C4F1; };
 		4CA8CAFB49BEAFFE7167493E /* ChordEngine.swift */ = {isa = PBXBuildFile; fileRef = A6B2A5332B811656C786B90F; };
 		FF03C86ABA8991909F4BC2AA /* LiveEvents.swift */ = {isa = PBXBuildFile; fileRef = 9104604AA09356FB292910A6; };
 		4E3E10CABF8E8C4BE16EB1DE /* Lyrics.swift */ = {isa = PBXBuildFile; fileRef = 307C5EC30768D401BF74343A; };
+		FFA1DFD332FF00A8437AC752 /* LyricsSources.swift */ = {isa = PBXBuildFile; fileRef = 387661BF3EAEB5E318B46619; };
 		70EA68AE2EF73406DFF4C18F /* MIDIFile.swift */ = {isa = PBXBuildFile; fileRef = 9C8CC3753B3D54BF89B4EF84; };
 		079FB16B8F0343D8CED60F9F /* MIDIWriter.swift */ = {isa = PBXBuildFile; fileRef = 4E8C0B0F57E93C50864F5650; };
 		BF510B445E2793ACDA7FAD1F /* PianoArranger.swift */ = {isa = PBXBuildFile; fileRef = A4BE38F1B29E4C2C0E193EBD; };
@@ -65,10 +67,12 @@
 		8F140C130442484862EF5EFC /* Mastering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Mastering.swift"; sourceTree = "<group>"; };
 		D0E456BA6FA68C3660ED236C /* MicEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MicEngine.swift"; sourceTree = "<group>"; };
 		E0A636DBFC3F223E732D4DFD /* OfflineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OfflineRenderer.swift"; sourceTree = "<group>"; };
+		3F68FA4ED2C6EB6535CDDAB0 /* CDG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CDG.swift"; sourceTree = "<group>"; };
 		586C48A1E73175CB24E1C4F1 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Chord.swift"; sourceTree = "<group>"; };
 		A6B2A5332B811656C786B90F /* ChordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChordEngine.swift"; sourceTree = "<group>"; };
 		9104604AA09356FB292910A6 /* LiveEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveEvents.swift"; sourceTree = "<group>"; };
 		307C5EC30768D401BF74343A /* Lyrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Lyrics.swift"; sourceTree = "<group>"; };
+		387661BF3EAEB5E318B46619 /* LyricsSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsSources.swift"; sourceTree = "<group>"; };
 		9C8CC3753B3D54BF89B4EF84 /* MIDIFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIFile.swift"; sourceTree = "<group>"; };
 		4E8C0B0F57E93C50864F5650 /* MIDIWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIWriter.swift"; sourceTree = "<group>"; };
 		A4BE38F1B29E4C2C0E193EBD /* PianoArranger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PianoArranger.swift"; sourceTree = "<group>"; };
@@ -142,10 +146,12 @@
 				E0A636DBFC3F223E732D4DFD,
 			); path = "Audio"; sourceTree = "<group>"; };
 		39173558B7F8BBD9119F85A1 /* Core */ = {isa = PBXGroup; children = (
+				3F68FA4ED2C6EB6535CDDAB0,
 				586C48A1E73175CB24E1C4F1,
 				A6B2A5332B811656C786B90F,
 				9104604AA09356FB292910A6,
 				307C5EC30768D401BF74343A,
+				387661BF3EAEB5E318B46619,
 				9C8CC3753B3D54BF89B4EF84,
 				4E8C0B0F57E93C50864F5650,
 				A4BE38F1B29E4C2C0E193EBD,
@@ -226,10 +232,12 @@
 				08CA720700C8558C03A832AB,
 				8A941AB3D2D76464E4B8B621,
 				2F62514B110669242B7FFD0E,
+				FB1AE0D81BBF2E6588167073,
 				304AF6FF922E55EC92BE272C,
 				4CA8CAFB49BEAFFE7167493E,
 				FF03C86ABA8991909F4BC2AA,
 				4E3E10CABF8E8C4BE16EB1DE,
+				FFA1DFD332FF00A8437AC752,
 				70EA68AE2EF73406DFF4C18F,
 				079FB16B8F0343D8CED60F9F,
 				BF510B445E2793ACDA7FAD1F,
