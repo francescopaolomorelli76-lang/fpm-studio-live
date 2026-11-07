@@ -1,0 +1,25 @@
+# Compila FPM Studio Live sui Mac di GitHub (gratis per i repository pubblici)
+# e produce "FPM-Studio-Live.zip" scaricabile da Actions → ultima esecuzione → Artifacts.
+name: Build app Mac
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compila (universale Intel + Apple Silicon)
+        run: |
+          xcodebuild -project FPMStudioLive.xcodeproj -scheme FPMStudioLive -configuration Release \
+            -derivedDataPath build ARCHS="x86_64 arm64" ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO build
+      - name: Impacchetta
+        run: |
+          cd "build/Build/Products/Release"
+          ditto -c -k --keepParent "FPM Studio Live.app" "$GITHUB_WORKSPACE/FPM-Studio-Live.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FPM-Studio-Live
+          path: FPM-Studio-Live.zip
