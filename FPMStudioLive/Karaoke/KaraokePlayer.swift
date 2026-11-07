@@ -78,6 +78,7 @@ final class KaraokePlayer: ObservableObject {
     init() {
         hub.start()
         if !settings.soundFontPath.isEmpty { _ = hub.loadSoundBank(path: settings.soundFontPath) }
+        if !settings.synthPluginID.isEmpty { usePlugin(id: settings.synthPluginID, name: settings.synthPluginName) }
         hub.synthReverb.wetDryMix = Float(settings.synthReverb)
         AudioHub.configureSynthEQ(hub.synthEQ, enabled: settings.synthEQ)
         hub.sequencer.onEnd = { [weak self] in self?.songEnded() }
@@ -111,7 +112,7 @@ final class KaraokePlayer: ObservableObject {
                 hub.sequencer.load(m)
                 duration = m.duration
                 bpm = m.mainBPM
-                if let l = sidecar?.lyrics, !l.isEmpty { lyrics = l; lyricsSource = "testo salvato in FPM Studio Live" }
+                if let l = sidecar?.lyrics, !l.isEmpty { lyrics = Self.repaired(l); lyricsSource = "testo salvato in FPM Studio Live" }
                 else {
                     lyrics = m.karaokeLyrics()
                     lyricsSource = lyrics.isEmpty ? "" : "testo del file MIDI/KAR"
@@ -154,7 +155,7 @@ final class KaraokePlayer: ObservableObject {
                     duration = fileAudio.duration
                 }
                 if let l = sidecar?.lyrics, !l.isEmpty {
-                    lyrics = l; lyricsSource = "testo salvato in FPM Studio Live"
+                    lyrics = Self.repaired(l); lyricsSource = "testo salvato in FPM Studio Live"
                 } else if let f = LyricsSources.find(for: media.audio) ?? (media.audio != item.url ? LyricsSources.find(for: item.url) : nil) {
                     lyrics = f.lyrics; lyricsSource = f.source
                 } else if let l = Self.embeddedAssetLyrics(item.url) {
@@ -301,6 +302,13 @@ final class KaraokePlayer: ObservableObject {
         }
     }
 
+    /// Testi salvati con versioni precedenti: righe troppo lunghe vengono divise.
+    static func repaired(_ l: KaraokeLyrics) -> KaraokeLyrics {
+        var r = l
+        r.lines = l.lines.flatMap { KaraokeLyrics.splitLongLine($0, forceByPauses: false) }
+        return r
+    }
+
     // MARK: CD+G
 
     private func updateCDG() {
@@ -404,7 +412,39 @@ final class KaraokePlayer: ObservableObject {
         catch { status = "Salvataggio non riuscito: \(error.localizedDescription)" }
     }
 
+    /// Suona le basi MIDI con uno strumento Audio Unit (es. Roland Sound Canvas VA).
+    func usePlugin(id: String, name: String) {
+        status = "Carico \(name)…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let s = GMSynth.makePlugin(id: id, name: name)
+            DispatchQueue.main.async {
+                guard let s = s else { self.status = "Non riesco ad avviare \(name)"; return }
+                self.hub.useSynth(s)
+                if let m = self.midi { self.hub.sequencer.load(m); self.applyMixerAfterReload() }
+                self.status = "Suoni: \(name)"
+            }
+        }
+    }
+
+    private func applyMixerAfterReload() {
+        hub.sequencer.setTranspose(transpose)
+        hub.sequencer.speed = tempo
+        for c in channels { hub.sequencer.setGain(c.channel, c.gain) }
+        let anySolo = channels.contains { $0.solo }
+        for c in channels { hub.sequencer.setMuted(c.channel, c.muted || (anySolo && !c.solo)) }
+    }
+
+    /// Torna ai SoundFont (sintetizzatore di sistema con il .sf2 scelto).
+    func useSoundFont() {
+        if hub.synth.isPlugin {
+            hub.useSynth(GMSynth())
+            if let m = midi { hub.sequencer.load(m); applyMixerAfterReload() }
+        }
+    }
+
     func reloadSoundFont() {
+        settings.synthPluginID = ""
+        useSoundFont()
         if settings.soundFontPath.isEmpty { status = "Suoni di sistema Apple"; return }
         status = hub.loadSoundBank(path: settings.soundFontPath) ? "SoundFont caricato: \(settings.soundFontName)" : "SoundFont non valido"
     }

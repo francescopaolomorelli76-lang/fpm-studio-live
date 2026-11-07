@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import CoreAudioKit
 import AppKit
 import UniformTypeIdentifiers
 
@@ -180,11 +182,31 @@ struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     @EnvironmentObject var player: KaraokePlayer
     @State private var found: [URL] = []
+    @State private var plugins: [AVAudioUnitComponent] = GMSynth.installedInstruments()
     @State private var searching = false
 
     var body: some View {
         TabView {
             Form {
+                Section(header: Text("Strumento professionale (plugin Audio Unit)")) {
+                    Text("Per il suono più fedele delle basi MIDI karaoke usa un modulo GM/GS professionale installato sul Mac, per esempio Roland Sound Canvas VA. Compaiono qui tutti gli strumenti Audio Unit installati.")
+                        .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Picker("Strumento", selection: Binding(get: { settings.synthPluginID }, set: { id in
+                        if id.isEmpty { player.reloadSoundFont(); return }
+                        let name = plugins.first { GMSynth.identifier($0.audioComponentDescription) == id }.map { $0.manufacturerName + " " + $0.name } ?? id
+                        settings.synthPluginID = id
+                        settings.synthPluginName = name
+                        player.usePlugin(id: id, name: name)
+                    })) {
+                        Text("Nessuno (usa il SoundFont qui sotto)").tag("")
+                        ForEach(plugins, id: \.self) { c in
+                            Text("\(c.manufacturerName) — \(c.name)").tag(GMSynth.identifier(c.audioComponentDescription))
+                        }
+                    }
+                    if !settings.synthPluginID.isEmpty {
+                        Button("Apri il pannello del plugin") { PluginWindow.show(AudioHub.shared.synth.node, title: settings.synthPluginName) }
+                    }
+                }
                 Section(header: Text("Suoni (SoundFont)")) {
                     Text("Carica il SoundFont .sf2 di Win Live (o un altro .sf2/.dls). Il file resta sul tuo disco e viene letto solo da questa app.")
                         .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -253,6 +275,20 @@ struct SettingsView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let r = AppSettings.findSoundFonts()
             DispatchQueue.main.async { found = r; searching = false }
+        }
+    }
+}
+
+/// Finestra con l'interfaccia del plugin (per scegliere kit, effetti, modalità GS del modulo).
+enum PluginWindow {
+    static func show(_ unit: AVAudioUnit, title: String) {
+        unit.auAudioUnit.requestViewController { vc in
+            DispatchQueue.main.async {
+                guard let vc = vc else { return }
+                let w = NSWindow(contentViewController: vc)
+                w.title = title
+                w.makeKeyAndOrderFront(nil)
+            }
         }
     }
 }

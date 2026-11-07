@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct KaraokeView: View {
     @ObservedObject var player: KaraokePlayer
@@ -9,6 +10,7 @@ struct KaraokeView: View {
     @ObservedObject var settings = AppSettings.shared
     @State private var showEditor = false
     @State private var showMixer = true
+    @State private var diagnostics: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -19,8 +21,15 @@ struct KaraokeView: View {
                     .frame(minHeight: 300)
                 TransportPanel(player: player)
                 controls
-                if !player.status.isEmpty {
-                    Text(player.status).font(.caption).foregroundColor(Theme.soft).frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top) {
+                    Text(player.status).font(.caption).foregroundColor(Theme.soft)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let it = player.item {
+                        Button(action: { diagnostics = LyricsDiagnostics.report(for: it.url) }) {
+                            Label("Diagnostica testo", systemImage: "stethoscope")
+                        }.buttonStyle(NeonButtonStyle(prominent: false)).font(.caption)
+                    }
                 }
             }
             if showMixer {
@@ -33,6 +42,25 @@ struct KaraokeView: View {
             }
         }
         .sheet(isPresented: $showEditor) { LyricsEditorView(player: player) }
+        .sheet(isPresented: Binding(get: { diagnostics != nil }, set: { if !$0 { diagnostics = nil } })) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Diagnostica testo").font(.system(size: 18, weight: .heavy)).foregroundStyle(Theme.gradient)
+                Text("Copia questo testo e incollalo nella chat: mostra cosa contiene il file.").font(.caption).foregroundColor(Theme.soft)
+                ScrollView {
+                    Text(diagnostics ?? "").font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack {
+                    Button("Copia") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(diagnostics ?? "", forType: .string)
+                    }.buttonStyle(NeonButtonStyle())
+                    Spacer()
+                    Button("Chiudi") { diagnostics = nil }.buttonStyle(NeonButtonStyle(prominent: false))
+                }
+            }
+            .padding(18).frame(width: 720, height: 480).background(Theme.bg)
+        }
     }
 
     private var controls: some View {

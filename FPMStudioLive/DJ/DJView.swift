@@ -139,7 +139,10 @@ struct DeckView: View {
                 Slider(value: $deck.pitchPercent, in: -16...16).accentColor(accent)
                 Button("0") { deck.pitchPercent = 0 }.buttonStyle(NeonButtonStyle(prominent: false))
             }
-            if let e = deck.error { Text(e).font(.caption).foregroundColor(Theme.warn) }
+            if let e = deck.error {
+                Text(e).font(.caption).foregroundColor(Theme.warn)
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             _ = providers.first?.loadObject(ofClass: URL.self) { url, _ in

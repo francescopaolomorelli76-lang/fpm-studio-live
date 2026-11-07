@@ -11,7 +11,7 @@ final class AudioHub {
     static let shared = AudioHub()
 
     let engine = AVAudioEngine()
-    let synth = GMSynth()
+    private(set) var synth = GMSynth()
     lazy var sequencer = MIDISequencer(synth: synth)
     let synthEQ = AVAudioUnitEQ(numberOfBands: 4)
     let synthReverb = AVAudioUnitReverb()
@@ -101,6 +101,18 @@ final class AudioHub {
     private func restart() {
         engine.stop()
         start()
+    }
+
+    /// Sostituisce lo strumento delle basi MIDI (SoundFont di sistema o plugin Audio Unit).
+    func useSynth(_ new: GMSynth) {
+        let e = engine
+        sequencer.pause()
+        let fmt = synthEQ.inputFormat(forBus: 0)
+        e.detach(synth.node)
+        e.attach(new.node)
+        e.connect(new.node, to: synthEQ, format: fmt.channelCount > 0 ? fmt : nil)
+        synth = new
+        sequencer.retarget(new)
     }
 
     func loadSoundBank(path: String) -> Bool {

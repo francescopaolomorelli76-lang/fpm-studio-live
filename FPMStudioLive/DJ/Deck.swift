@@ -6,7 +6,7 @@ enum MIDIRenderCache {
     static func audioURL(for midiURL: URL, soundBank: String, progress: @escaping (Double) -> Void) throws -> URL {
         let attrs = try? FileManager.default.attributesOfItem(atPath: midiURL.path)
         let stamp = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        let key = "\(midiURL.path)|\(stamp)|\(soundBank)".data(using: .utf8)!.base64EncodedString()
+        let key = "\(midiURL.path)|\(stamp)|\(soundBank)|\(AppSettings.shared.synthPluginID)".data(using: .utf8)!.base64EncodedString()
             .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
         let out = AppPaths.renderCache.appendingPathComponent(String(key.suffix(100)) + ".wav")
         if FileManager.default.fileExists(atPath: out.path) { return out }

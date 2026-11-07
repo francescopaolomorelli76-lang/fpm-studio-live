@@ -6,9 +6,43 @@ import os
 /// Sintetizzatore General MIDI multitimbrico di macOS (DLSMusicDevice) che carica SoundFont .sf2 e .dls.
 /// Qui si carica il SoundFont di Win Live (o un altro) dal disco dell'utente.
 final class GMSynth {
-    let node: AVAudioUnitMIDIInstrument
+    let node: AVAudioUnit
     var audioUnit: AudioUnit { node.audioUnit }
     private(set) var soundBankName = "Suoni di sistema (Apple GS)"
+    /// true = strumento Audio Unit di terze parti (es. Roland Sound Canvas VA).
+    let isPlugin: Bool
+
+    init(plugin: AVAudioUnit, name: String) {
+        node = plugin
+        isPlugin = true
+        soundBankName = name
+    }
+
+    /// Strumenti Audio Unit installati sul Mac (Roland Sound Canvas VA, ecc.).
+    static func installedInstruments() -> [AVAudioUnitComponent] {
+        let any = AudioComponentDescription(componentType: kAudioUnitType_MusicDevice, componentSubType: 0,
+                                            componentManufacturer: 0, componentFlags: 0, componentFlagsMask: 0)
+        return AVAudioUnitComponentManager.shared().components(matching: any)
+            .sorted { ($0.manufacturerName + $0.name).localizedCaseInsensitiveCompare($1.manufacturerName + $1.name) == .orderedAscending }
+    }
+
+    static func identifier(_ d: AudioComponentDescription) -> String { "\(d.componentType)-\(d.componentSubType)-\(d.componentManufacturer)" }
+
+    static func description(from id: String) -> AudioComponentDescription? {
+        let p = id.split(separator: "-").compactMap { UInt32($0) }
+        guard p.count == 3 else { return nil }
+        return AudioComponentDescription(componentType: p[0], componentSubType: p[1], componentManufacturer: p[2], componentFlags: 0, componentFlagsMask: 0)
+    }
+
+    /// Crea lo strumento plugin (in modo sincrono: da usare fuori dal thread principale o all'avvio).
+    static func makePlugin(id: String, name: String) -> GMSynth? {
+        guard let d = description(from: id) else { return nil }
+        let sem = DispatchSemaphore(value: 0)
+        var made: AVAudioUnit?
+        AVAudioUnit.instantiate(with: d, options: []) { unit, _ in made = unit; sem.signal() }
+        _ = sem.wait(timeout: .now() + 10)
+        return made.map { GMSynth(plugin: $0, name: name) }
+    }
 
     init() {
         let desc = AudioComponentDescription(componentType: kAudioUnitType_MusicDevice,
@@ -16,12 +50,13 @@ final class GMSynth {
                                              componentManufacturer: kAudioUnitManufacturer_Apple,
                                              componentFlags: 0, componentFlagsMask: 0)
         node = AVAudioUnitMIDIInstrument(audioComponentDescription: desc)
+        isPlugin = false
     }
 
     /// Carica un SoundFont (.sf2/.sf3) o DLS. `nil` = suoni di sistema.
     @discardableResult
     func loadSoundBank(_ url: URL?) -> Bool {
-        guard let url = url, FileManager.default.fileExists(atPath: url.path) else { return false }
+        guard !isPlugin, let url = url, FileManager.default.fileExists(atPath: url.path) else { return false }
         var cfURL = url as CFURL
         let st = AudioUnitSetProperty(audioUnit, kMusicDeviceProperty_SoundBankURL, kAudioUnitScope_Global, 0,
                                       &cfURL, UInt32(MemoryLayout<CFURL>.size))
@@ -30,6 +65,7 @@ final class GMSynth {
     }
 
     func setInternalReverb(_ on: Bool) {
+        guard !isPlugin else { return }
         var v: UInt32 = on ? 1 : 0
         AudioUnitSetProperty(audioUnit, kMusicDeviceProperty_UsesInternalReverb, kAudioUnitScope_Global, 0, &v, UInt32(MemoryLayout<UInt32>.size))
     }
@@ -59,7 +95,7 @@ final class MIDISequencer {
         var d2: UInt8
     }
 
-    let synth: GMSynth
+    private(set) var synth: GMSynth
     private(set) var events: [Ev] = []
     private(set) var duration: Double = 0
     private var index = 0
@@ -104,6 +140,16 @@ final class MIDISequencer {
 
     deinit {
         AudioUnitRemoveRenderNotify(synth.audioUnit, MIDISequencer.renderNotify, Unmanaged.passUnretained(self).toOpaque())
+    }
+
+    /// Passa a un altro strumento (SoundFont ↔ plugin) senza ricreare il sequencer.
+    func retarget(_ s: GMSynth) {
+        os_unfair_lock_lock(&lock)
+        AudioUnitRemoveRenderNotify(synth.audioUnit, MIDISequencer.renderNotify, Unmanaged.passUnretained(self).toOpaque())
+        synth = s
+        AudioUnitAddRenderNotify(s.audioUnit, MIDISequencer.renderNotify, Unmanaged.passUnretained(self).toOpaque())
+        sentPitch = [[Int16]](repeating: [Int16](repeating: -1, count: 128), count: 16)
+        os_unfair_lock_unlock(&lock)
     }
 
     var position: Double {

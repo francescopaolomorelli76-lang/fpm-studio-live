@@ -28,6 +28,7 @@
 		4CA8CAFB49BEAFFE7167493E /* ChordEngine.swift */ = {isa = PBXBuildFile; fileRef = A6B2A5332B811656C786B90F; };
 		FF03C86ABA8991909F4BC2AA /* LiveEvents.swift */ = {isa = PBXBuildFile; fileRef = 9104604AA09356FB292910A6; };
 		4E3E10CABF8E8C4BE16EB1DE /* Lyrics.swift */ = {isa = PBXBuildFile; fileRef = 307C5EC30768D401BF74343A; };
+		DD3DA858C0E8879A2CF26680 /* LyricsDiagnostics.swift */ = {isa = PBXBuildFile; fileRef = 7C6751B52A8511D49561996D; };
 		FFA1DFD332FF00A8437AC752 /* LyricsSources.swift */ = {isa = PBXBuildFile; fileRef = 387661BF3EAEB5E318B46619; };
 		70EA68AE2EF73406DFF4C18F /* MIDIFile.swift */ = {isa = PBXBuildFile; fileRef = 9C8CC3753B3D54BF89B4EF84; };
 		079FB16B8F0343D8CED60F9F /* MIDIWriter.swift */ = {isa = PBXBuildFile; fileRef = 4E8C0B0F57E93C50864F5650; };
@@ -72,6 +73,7 @@
 		A6B2A5332B811656C786B90F /* ChordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChordEngine.swift"; sourceTree = "<group>"; };
 		9104604AA09356FB292910A6 /* LiveEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveEvents.swift"; sourceTree = "<group>"; };
 		307C5EC30768D401BF74343A /* Lyrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Lyrics.swift"; sourceTree = "<group>"; };
+		7C6751B52A8511D49561996D /* LyricsDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsDiagnostics.swift"; sourceTree = "<group>"; };
 		387661BF3EAEB5E318B46619 /* LyricsSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsSources.swift"; sourceTree = "<group>"; };
 		9C8CC3753B3D54BF89B4EF84 /* MIDIFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIFile.swift"; sourceTree = "<group>"; };
 		4E8C0B0F57E93C50864F5650 /* MIDIWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIWriter.swift"; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 				A6B2A5332B811656C786B90F,
 				9104604AA09356FB292910A6,
 				307C5EC30768D401BF74343A,
+				7C6751B52A8511D49561996D,
 				387661BF3EAEB5E318B46619,
 				9C8CC3753B3D54BF89B4EF84,
 				4E8C0B0F57E93C50864F5650,
@@ -237,6 +240,7 @@
 				4CA8CAFB49BEAFFE7167493E,
 				FF03C86ABA8991909F4BC2AA,
 				4E3E10CABF8E8C4BE16EB1DE,
+				DD3DA858C0E8879A2CF26680,
 				FFA1DFD332FF00A8437AC752,
 				70EA68AE2EF73406DFF4C18F,
 				079FB16B8F0343D8CED60F9F,

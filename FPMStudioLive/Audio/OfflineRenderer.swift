@@ -49,12 +49,14 @@ enum OfflineRenderer {
         var sampleRate = 44100.0
         var reverb: Float = 14          // % del riverbero di sala aggiunto
         var eq = true
+        /// Strumento plugin (es. Roland Sound Canvas VA); nil = SoundFont.
+        var pluginID: String? = AppSettings.shared.synthPluginID.isEmpty ? nil : AppSettings.shared.synthPluginID
     }
 
     static func render(_ midi: MIDIFile, settings: Settings, progress: @escaping (Double) -> Void) throws -> RenderedAudio {
         let sr = settings.sampleRate
         let engine = AVAudioEngine()
-        let synth = GMSynth()
+        let synth = settings.pluginID.flatMap { GMSynth.makePlugin(id: $0, name: "") } ?? GMSynth()
         let eq = AVAudioUnitEQ(numberOfBands: 4)
         let reverb = AVAudioUnitReverb()
         let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 2)!

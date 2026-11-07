@@ -19,6 +19,9 @@ final class AppSettings: ObservableObject {
     @Published var libraryFolders: [String] { didSet { d.set(libraryFolders, forKey: "libraryFolders") } }
     /// Show lock: blocca modifiche accidentali durante lo spettacolo.
     @Published var showLock: Bool { didSet { d.set(showLock, forKey: "showLock") } }
+    /// Strumento Audio Unit per le basi MIDI (vuoto = SoundFont).
+    @Published var synthPluginID: String { didSet { d.set(synthPluginID, forKey: "synthPluginID") } }
+    @Published var synthPluginName: String { didSet { d.set(synthPluginName, forKey: "synthPluginName") } }
 
     private init() {
         soundFontPath = d.string(forKey: "soundFontPath") ?? ""
@@ -32,10 +35,15 @@ final class AppSettings: ObservableObject {
         crossfadeSeconds = d.object(forKey: "crossfadeSeconds") as? Double ?? 8
         libraryFolders = d.stringArray(forKey: "libraryFolders") ?? []
         showLock = d.bool(forKey: "showLock")
+        synthPluginID = d.string(forKey: "synthPluginID") ?? ""
+        synthPluginName = d.string(forKey: "synthPluginName") ?? ""
     }
 
     var soundFontURL: URL? { soundFontPath.isEmpty ? nil : URL(fileURLWithPath: soundFontPath) }
-    var soundFontName: String { soundFontPath.isEmpty ? "Suoni di sistema Apple" : URL(fileURLWithPath: soundFontPath).deletingPathExtension().lastPathComponent }
+    var soundFontName: String {
+        if !synthPluginID.isEmpty { return synthPluginName + " (plugin)" }
+        return soundFontPath.isEmpty ? "Suoni di sistema Apple" : URL(fileURLWithPath: soundFontPath).deletingPathExtension().lastPathComponent
+    }
 
     /// Cerca automaticamente SoundFont nelle cartelle più comuni (anche quelle copiate da Win Live).
     static func findSoundFonts() -> [URL] {

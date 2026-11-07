@@ -98,15 +98,100 @@ final class AudioFilePlayer {
 enum AudioDecode {
     static func playableURL(_ url: URL) throws -> URL {
         if (try? AVAudioFile(forReading: url)) != nil { return url }
+        try checkAccess(url)
         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
         let stamp = Int((attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
         let key = "\(url.path)|\(stamp)".data(using: .utf8)!.base64EncodedString()
             .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
-        let dest = AppPaths.renderCache.appendingPathComponent("audio-" + String(key.suffix(80)) + ".caf")
-        if FileManager.default.fileExists(atPath: dest.path), (try? AVAudioFile(forReading: dest)) != nil { return dest }
+        let stem = "audio-" + String(key.suffix(80))
+        let cached = AppPaths.renderCache.appendingPathComponent(stem + ".caf")
+        if FileManager.default.fileExists(atPath: cached.path), (try? AVAudioFile(forReading: cached)) != nil { return cached }
+
+        var reasons: [String] = []
+        if let e = Result(catching: { try AVAudioFile(forReading: url) }).failureError { reasons.append("lettura diretta: \(describe(e))") }
+
+        // 2. Copia "ripulita": senza tag ID3 (copertine enormi o tag rovinati bloccano Core Audio)
+        //    e con l'estensione giusta secondo il contenuto vero del file.
+        if let data = try? Data(contentsOf: url, options: .mappedIfSafe) {
+            let (payload, realExt) = sanitize(data, declared: url.pathExtension.lowercased())
+            let tmp = AppPaths.renderCache.appendingPathComponent(stem + "-src." + realExt)
+            do {
+                try payload.write(to: tmp, options: .atomic)
+                if (try? AVAudioFile(forReading: tmp)) != nil { return tmp }
+                if let u = try? convertWithAsset(tmp, to: cached) { return u }
+                reasons.append("copia senza tag (\(realExt)): non leggibile")
+            } catch { reasons.append("copia temporanea: \(describe(error))") }
+        }
+        // 3. Conversione con AVFoundation dal file originale.
+        do { return try convertWithAsset(url, to: cached) }
+        catch { reasons.append("conversione: \(describe(error))") }
+        throw RenderError.engine("formato non riconosciuto da macOS (" + reasons.joined(separator: "; ") + ")")
+    }
+
+    /// Permessi e iCloud: messaggi chiari invece di errori generici.
+    static func checkAccess(_ url: URL) throws {
+        let fm = FileManager.default
+        if let v = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+           let st = v.ubiquitousItemDownloadingStatus, st != .current {
+            try? fm.startDownloadingUbiquitousItem(at: url)
+            throw RenderError.engine("il file è su iCloud e non è ancora scaricato sul Mac: lo sto scaricando, riprova tra poco")
+        }
+        guard fm.fileExists(atPath: url.path) else { throw RenderError.engine("il file non esiste più in questa posizione") }
+        guard fm.isReadableFile(atPath: url.path), (try? FileHandle(forReadingFrom: url))?.readData(ofLength: 4).count ?? 0 > 0 else {
+            throw RenderError.engine("macOS non permette all'app di leggere questa cartella. Apri Impostazioni di Sistema → Sicurezza e Privacy → Privacy → File e cartelle (o Accesso completo al disco) e abilita FPM Studio Live, poi riprova")
+        }
+    }
+
+    static func describe(_ e: Error) -> String {
+        let n = e as NSError
+        if n.domain == NSOSStatusErrorDomain {
+            let c = UInt32(bitPattern: Int32(truncatingIfNeeded: n.code))
+            let chars = [24, 16, 8, 0].map { Character(UnicodeScalar(UInt8((c >> UInt32($0)) & 0xFF))) }
+            let fourCC = String(chars).allSatisfy({ $0.isLetter || $0.isNumber || $0 == " " }) ? " '\(String(chars))'" : ""
+            return "codice \(n.code)\(fourCC)"
+        }
+        return n.localizedDescription
+    }
+
+    /// Toglie i tag ID3v2/ID3v1 e riconosce il formato reale dai primi byte.
+    static func sanitize(_ d: Data, declared: String) -> (Data, String) {
+        let b = [UInt8](d.prefix(64))
+        func at(_ o: Int, _ s: String) -> Bool { let a = Array(s.utf8); return b.count >= o + a.count && Array(b[o..<(o + a.count)]) == a }
+        if at(4, "ftyp") { return (d, "m4a") }
+        if at(0, "RIFF") && at(8, "WAVE") { return (d, "wav") }
+        if at(0, "FORM") { return (d, "aiff") }
+        if at(0, "fLaC") { return (d, "flac") }
+        if at(0, "caff") { return (d, "caf") }
+        var start = 0
+        // Possono esserci più tag ID3 di fila.
+        while d.count > start + 10, d[start] == 0x49, d[start + 1] == 0x44, d[start + 2] == 0x33 {
+            let size = Int(d[start + 6] & 0x7F) << 21 | Int(d[start + 7] & 0x7F) << 14 | Int(d[start + 8] & 0x7F) << 7 | Int(d[start + 9] & 0x7F)
+            let footer = d[start + 5] & 0x10 != 0 ? 10 : 0
+            start += 10 + size + footer
+        }
+        // Cerco la prima sincronia di frame MPEG valida (0xFFE…) o un ADTS AAC (0xFFF…, layer 0).
+        var i = min(start, d.count)
+        let limit = min(d.count - 4, i + 2_000_000)
+        var isADTS = false
+        while i < limit {
+            if d[i] == 0xFF && d[i + 1] & 0xE0 == 0xE0 {
+                let layer = (d[i + 1] >> 1) & 0x03
+                let bitrate = d[i + 2] >> 4
+                if layer == 0 && d[i + 1] & 0xF0 == 0xF0 { isADTS = true; break }
+                if layer != 0 && bitrate != 0 && bitrate != 0x0F && (d[i + 2] >> 2) & 0x03 != 0x03 { break }
+            }
+            i += 1
+        }
+        if i >= limit { i = min(start, d.count) }
+        var end = d.count
+        if end - i > 128, d[end - 128] == 0x54, d[end - 127] == 0x41, d[end - 126] == 0x47 { end -= 128 }   // "TAG" ID3v1
+        return (d.subdata(in: i..<max(i, end)), isADTS ? "aac" : (declared.isEmpty ? "mp3" : (declared == "aac" ? "aac" : "mp3")))
+    }
+
+    private static func convertWithAsset(_ url: URL, to dest: URL) throws -> URL {
         let asset = AVURLAsset(url: url)
         guard let track = asset.tracks(withMediaType: .audio).first else {
-            throw RenderError.engine("il file \(url.lastPathComponent) non contiene audio leggibile")
+            throw RenderError.engine("nessuna traccia audio leggibile")
         }
         let reader = try AVAssetReader(asset: asset)
         let sr = 44100.0
@@ -114,10 +199,11 @@ enum AudioDecode {
             AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsNonInterleaved: false, AVLinearPCMIsBigEndianKey: false, AVSampleRateKey: sr, AVNumberOfChannelsKey: 2])
         reader.add(out)
-        guard reader.startReading() else { throw RenderError.engine(reader.error?.localizedDescription ?? "lettura non riuscita") }
+        guard reader.startReading() else { throw RenderError.engine(reader.error.map { describe($0) } ?? "lettura non riuscita") }
         let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sr, channels: 2, interleaved: true)!
         try? FileManager.default.removeItem(at: dest)
         let file = try AVAudioFile(forWriting: dest, settings: fmt.settings, commonFormat: .pcmFormatFloat32, interleaved: true)
+        var frames = 0
         while let sb = out.copyNextSampleBuffer() {
             guard let bb = CMSampleBufferGetDataBuffer(sb) else { continue }
             let n = CMSampleBufferGetNumSamples(sb)
@@ -125,10 +211,15 @@ enum AudioDecode {
             buf.frameLength = AVAudioFrameCount(n)
             CMBlockBufferCopyDataBytes(bb, atOffset: 0, dataLength: n * 8, destination: dst)
             try file.write(from: buf)
+            frames += n
         }
-        if reader.status == .failed { throw RenderError.engine(reader.error?.localizedDescription ?? "conversione non riuscita") }
+        if reader.status == .failed || frames == 0 { throw RenderError.engine(reader.error.map { describe($0) } ?? "nessun audio decodificato") }
         return dest
     }
+}
+
+private extension Result where Failure == Error {
+    var failureError: Error? { if case .failure(let e) = self { return e }; return nil }
 }
 
 /// Trova audio e grafica CDG: MP3+G (stesso nome), file .cdg scelto direttamente, oppure ZIP che li contiene.
