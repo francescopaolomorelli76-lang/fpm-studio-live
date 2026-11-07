@@ -249,6 +249,33 @@ enum MelodyDetector {
                 }
                 if let b = best, b.score > 0.35 { return b.ch }
             }
+            // Testo a righe (spesso mostrato in anticipo rispetto al canto): la melodia è la traccia
+            // quasi monofonica che ha note dentro quasi ogni riga del testo.
+            let lines = lyr.lines.filter { $0.startTime >= 0 }
+            if lines.count >= 6 {
+                var best: (ch: Int, score: Double)?
+                for (ch, ns) in byCh where ns.count >= 20 {
+                    let prog = midi.programs[ch] ?? 0
+                    let mono = 1 - ChordEngine.polyphony(ns, ppq: midi.ppq)
+                    let avg = Double(ns.map { $0.pitch }.reduce(0, +)) / Double(ns.count)
+                    if ChordEngine.isBassProgram(prog) || avg < 45 || mono < 0.6 { continue }
+                    let on = ns.map { midi.seconds(atTick: $0.startTick) }.sorted()
+                    var covered = 0
+                    for (i, l) in lines.enumerated() {
+                        let a = l.startTime - 0.3
+                        let b = i + 1 < lines.count ? lines[i + 1].startTime : a + 8
+                        var lo = 0, hi = on.count
+                        while lo < hi { let m = (lo + hi) / 2; if on[m] < a { lo = m + 1 } else { hi = m } }
+                        var n = 0
+                        while lo + n < on.count && on[lo + n] < b { n += 1 }
+                        if n >= 2 { covered += 1 }
+                    }
+                    let coverage = Double(covered) / Double(lines.count)
+                    let score = coverage * 0.7 + mono * 0.2 + (1 - min(1, abs(avg - 64) / 24)) * 0.1
+                    if best == nil || score > best!.score { best = (ch, score) }
+                }
+                if let b = best, b.score > 0.55 { return b.ch }
+            }
         }
         var best: (ch: Int, score: Double)?
         for (ch, ns) in byCh where ns.count >= 16 {

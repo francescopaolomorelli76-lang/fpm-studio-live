@@ -297,8 +297,20 @@ final class MIDIFile {
             if paragraph, !lyrics.lines.isEmpty { lyrics.lines[lyrics.lines.count - 1].endsParagraph = true }
         }
         var hadBreaks = false
-        for (tick, raw) in source {
+        // Simbolo di inizio riga usato da alcuni produttori (es. "<IO MI NASCOSI…"): se la maggior parte
+        // degli eventi comincia con lo stesso segno, quel segno vale come "a capo".
+        let markers: Set<Character> = ["<", ">", "#", "%", "^", "~", "|", "*"]
+        var markerCount: [Character: Int] = [:]
+        for (_, raw) in source { if let f = raw.first, markers.contains(f) { markerCount[f, default: 0] += 1 } }
+        let lineMarker = markerCount.max { $0.value < $1.value }.flatMap { Double($0.value) >= Double(source.count) * 0.4 ? $0.key : nil }
+        for (tick, raw0) in source {
             let t = seconds(atTick: tick)
+            var raw = raw0
+            if let mk = lineMarker, raw.first == mk {
+                raw.removeFirst()
+                hadBreaks = true
+                flush(paragraph: false)
+            }
             // Lavoro sugli scalari Unicode: "\r\n" in Swift è un unico carattere.
             var u = Array(raw.unicodeScalars)
             var leadingBreaks = 0, leadingPara = false
@@ -324,9 +336,56 @@ final class MIDIFile {
             if trailingBreaks > 0 { hadBreaks = true; flush(paragraph: trailingBreaks >= 2) }
         }
         flush(paragraph: false)
+        // Testo a righe intere (un evento per riga): le sillabe seguono le note della melodia, come in Win Live.
+        alignWholeLinesToMelody(&lyrics)
         // Nessun a capo nel file, o righe troppo lunghe: divido alle pause e a ~42 caratteri.
         lyrics.lines = lyrics.lines.flatMap { KaraokeLyrics.splitLongLine($0, forceByPauses: !hadBreaks) }
         return lyrics
+    }
+}
+
+extension MIDIFile {
+    /// Per le righe scritte in un solo evento: divido in sillabe e assegno a ciascuna l'attacco
+    /// di una nota della melodia (traccia rilevata automaticamente) tra l'inizio di questa riga e la successiva.
+    func alignWholeLinesToMelody(_ lyrics: inout KaraokeLyrics) {
+        let wholeLines = lyrics.lines.filter { l in l.syllables.contains { $0.text.trimmingCharacters(in: .whitespaces).contains(" ") } }
+        guard !wholeLines.isEmpty, Double(wholeLines.count) >= Double(lyrics.lines.count) * 0.5 else { return }
+        let melody = MelodyDetector.detect(self, lyrics: lyrics)
+        let onsets = notes.filter { $0.channel == melody }.map { seconds(atTick: $0.startTick) }.sorted()
+        // Anticipo del testo sul canto (le righe compaiono prima): mediana tra inizio riga e prima nota.
+        var deltas: [Double] = []
+        for l in lyrics.lines {
+            let st = l.startTime
+            guard st >= 0, let first = onsets.first(where: { $0 >= st - 0.1 }) else { continue }
+            let d = first - st
+            if d >= 0 && d < 4 { deltas.append(d) }
+        }
+        deltas.sort()
+        let lead = deltas.isEmpty ? 0 : deltas[deltas.count / 2]
+        for i in lyrics.lines.indices {
+            let line = lyrics.lines[i]
+            guard line.syllables.contains(where: { $0.text.trimmingCharacters(in: .whitespaces).contains(" ") }),
+                  let start = line.syllables.first?.time, start >= 0 else { continue }
+            let next = i + 1 < lyrics.lines.count ? lyrics.lines[i + 1].startTime : -1
+            let end = next > start ? next : start + 8
+            let syl = Syllabifier.syllables(line.text)
+            guard !syl.isEmpty else { continue }
+            let ns = onsets.filter { $0 >= start + lead - 0.25 && $0 < end + lead - 0.25 }
+            var times: [Double] = []
+            if ns.count >= syl.count {
+                if Double(ns.count) <= Double(syl.count) * 1.6 { times = Array(ns.prefix(syl.count)) }
+                else { times = (0..<syl.count).map { ns[Int(Double($0) * Double(ns.count) / Double(syl.count))] } }
+            } else {
+                times = ns
+                let from = ns.last.map { $0 + 0.25 } ?? (start + lead)
+                let remaining = syl.count - ns.count
+                let span = max(0.3, (end + lead - from) * 0.85)
+                for k in 0..<remaining { times.append(from + span * Double(k) / Double(max(1, remaining))) }
+            }
+            var out = LyricLine(syllables: zip(syl, times).map { LyricSyllable(text: $0.text, time: $1) })
+            out.endsParagraph = line.endsParagraph
+            lyrics.lines[i] = out
+        }
     }
 }
 
@@ -340,7 +399,7 @@ extension KaraokeLyrics {
         for (i, s) in line.syllables.enumerated() {
             let gap = i > 0 && s.time >= 0 && line.syllables[i - 1].time >= 0 ? s.time - line.syllables[i - 1].time : 0
             let wordStart = i == 0 || line.syllables[i - 1].text.hasSuffix(" ") || s.text.hasPrefix(" ")
-            if !cur.syllables.isEmpty && wordStart && (gap > 0.9 || len + s.text.count > maxChars) {
+            if !cur.syllables.isEmpty && wordStart && ((forceByPauses && gap > 0.9) || len + s.text.count > maxChars) {
                 out.append(cur); cur = LyricLine(); len = 0
             }
             cur.syllables.append(s)
