@@ -43,6 +43,8 @@ struct ContentView: View {
     @EnvironmentObject var shortcuts: ShortcutManager
     @State private var section: AppSection = .karaoke
     @State private var showLibrary = true
+    /// L'app si apre solo dopo il codice di attivazione (se la versione lo richiede). Va inserito a ogni apertura.
+    @State private var activated = !Activation.isRequired
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,6 +83,7 @@ struct ContentView: View {
         .background(Theme.background.ignoresSafeArea())
         .foregroundColor(Theme.ink)
         .preferredColorScheme(.dark)
+        .overlay(Group { if !activated { ActivationView { withAnimation { activated = true } } } })
         .frame(minWidth: 720, minHeight: 480)
         .onAppear {
             player.library = library
@@ -317,6 +320,65 @@ enum PluginWindow {
                 w.title = title
                 w.makeKeyAndOrderFront(nil)
             }
+        }
+    }
+}
+
+/// Schermata di attivazione all'apertura: codice a 6 cifre che cambia ogni 30 secondi,
+/// generato sull'iPhone del titolare (app Password di Apple, Google Authenticator o simili).
+struct ActivationView: View {
+    var onSuccess: () -> Void
+    @State private var code = ""
+    @State private var message = ""
+    @State private var attempts = 0
+    @State private var lockedUntil: Date?
+
+    var body: some View {
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            VStack(spacing: 18) {
+                Image("Logo").resizable().scaledToFit().frame(width: 150, height: 150).clipShape(RoundedRectangle(cornerRadius: 30))
+                    .shadow(color: Theme.violet.opacity(0.6), radius: 24)
+                Text("FPM Studio Live").font(.system(size: 30, weight: .heavy)).foregroundStyle(Theme.gradient)
+                Text("Inserisci il codice di attivazione").font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.ink)
+                Text("Il codice ha 6 cifre e cambia ogni 30 secondi. Chiedilo al titolare della licenza.")
+                    .font(.system(size: 12)).foregroundColor(Theme.soft).multilineTextAlignment(.center).frame(maxWidth: 360)
+                TextField("000 000", text: $code)
+                    .font(.system(size: 34, weight: .bold, design: .monospaced))
+                    .multilineTextAlignment(.center)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .frame(width: 260)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Theme.bg2))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.violet, lineWidth: 1))
+                    .onChange(of: code) { v in
+                        let digits = String(v.filter { $0.isNumber }.prefix(6))
+                        if digits != v { code = digits }
+                        if digits.count == 6 { submit() }
+                    }
+                    .onSubmit { submit() }
+                Button("Attiva") { submit() }.buttonStyle(NeonButtonStyle()).keyboardShortcut(.defaultAction)
+                    .disabled(code.count != 6)
+                Text(message).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.warn).frame(height: 18)
+                Text("© FPM WebDesignTech").font(.system(size: 10)).foregroundColor(Theme.soft)
+            }
+            .padding(40)
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func submit() {
+        if let l = lockedUntil, l > Date() {
+            message = "Troppi tentativi: riprova tra \(Int(l.timeIntervalSinceNow.rounded(.up))) secondi"; return
+        }
+        if Activation.check(code) {
+            message = ""
+            onSuccess()
+        } else {
+            attempts += 1
+            code = ""
+            if attempts >= 5 { lockedUntil = Date().addingTimeInterval(60); attempts = 0; message = "Troppi tentativi: attendi un minuto" }
+            else { message = "Codice non valido o scaduto: usa quello che vedi adesso sull'iPhone" }
         }
     }
 }

@@ -10,6 +10,24 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Chiave di attivazione (dal segreto del repository, mai nel codice)
+        env:
+          FPM_ACTIVATION_SECRET: ${{ secrets.FPM_ACTIVATION_SECRET }}
+        run: |
+          if [ -n "$FPM_ACTIVATION_SECRET" ]; then
+            python3 - <<'PY'
+          import os
+          key = os.environ["FPM_ACTIVATION_SECRET"].strip().replace(" ", "").upper().encode()
+          mask = b"FPM-Studio-Live-2026"
+          masked = ", ".join(str(b ^ mask[i % len(mask)]) for i, b in enumerate(key))
+          src = open("FPMStudioLive/Core/LicenseSecret.swift").read()
+          src = src.replace("static let masked: [UInt8] = []", "static let masked: [UInt8] = [" + masked + "]")
+          open("FPMStudioLive/Core/LicenseSecret.swift", "w").write(src)
+          print("Attivazione richiesta in questa versione")
+          PY
+          else
+            echo "Nessun segreto FPM_ACTIVATION_SECRET: versione senza attivazione"
+          fi
       - name: Compila (universale Intel + Apple Silicon)
         run: |
           xcodebuild -project FPMStudioLive.xcodeproj -scheme FPMStudioLive -configuration Release \

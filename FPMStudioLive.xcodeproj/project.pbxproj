@@ -29,6 +29,7 @@
 		FB1AE0D81BBF2E6588167073 /* CDG.swift */ = {isa = PBXBuildFile; fileRef = 3F68FA4ED2C6EB6535CDDAB0; };
 		304AF6FF922E55EC92BE272C /* Chord.swift */ = {isa = PBXBuildFile; fileRef = 586C48A1E73175CB24E1C4F1; };
 		4CA8CAFB49BEAFFE7167493E /* ChordEngine.swift */ = {isa = PBXBuildFile; fileRef = A6B2A5332B811656C786B90F; };
+		E12D8EE39F0A31480C6BE56B /* LicenseSecret.swift */ = {isa = PBXBuildFile; fileRef = 57B8E5612C2FB2B83F9FE63F; };
 		FF03C86ABA8991909F4BC2AA /* LiveEvents.swift */ = {isa = PBXBuildFile; fileRef = 9104604AA09356FB292910A6; };
 		4E3E10CABF8E8C4BE16EB1DE /* Lyrics.swift */ = {isa = PBXBuildFile; fileRef = 307C5EC30768D401BF74343A; };
 		DD3DA858C0E8879A2CF26680 /* LyricsDiagnostics.swift */ = {isa = PBXBuildFile; fileRef = 7C6751B52A8511D49561996D; };
@@ -38,6 +39,7 @@
 		BF510B445E2793ACDA7FAD1F /* PianoArranger.swift */ = {isa = PBXBuildFile; fileRef = A4BE38F1B29E4C2C0E193EBD; };
 		20346EBEEA040F31B5455B01 /* SongGenerator.swift */ = {isa = PBXBuildFile; fileRef = 441AB21DAB3279DA563F7A30; };
 		FB36361C06063B35477BD57F /* SongStructure.swift */ = {isa = PBXBuildFile; fileRef = D2D0517CAA37A3AA185ECA6F; };
+		3874FB597C4F26FA930C1348 /* TOTP.swift */ = {isa = PBXBuildFile; fileRef = D33BD12ED639F964043E3CD5; };
 		84C13AFEA160D4E0A33ADECD /* DJController.swift */ = {isa = PBXBuildFile; fileRef = 24CB3C2EB7B2F7D2272C4C58; };
 		2B53ABC965C72CF6977D59FF /* DJView.swift */ = {isa = PBXBuildFile; fileRef = DA205542BF0CFE22FED80B38; };
 		1EC1CBA1A062BE26D7951B5E /* Deck.swift */ = {isa = PBXBuildFile; fileRef = 592D1037FE8DD7227FD6753F; };
@@ -79,6 +81,7 @@
 		3F68FA4ED2C6EB6535CDDAB0 /* CDG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CDG.swift"; sourceTree = "<group>"; };
 		586C48A1E73175CB24E1C4F1 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Chord.swift"; sourceTree = "<group>"; };
 		A6B2A5332B811656C786B90F /* ChordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChordEngine.swift"; sourceTree = "<group>"; };
+		57B8E5612C2FB2B83F9FE63F /* LicenseSecret.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LicenseSecret.swift"; sourceTree = "<group>"; };
 		9104604AA09356FB292910A6 /* LiveEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveEvents.swift"; sourceTree = "<group>"; };
 		307C5EC30768D401BF74343A /* Lyrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Lyrics.swift"; sourceTree = "<group>"; };
 		7C6751B52A8511D49561996D /* LyricsDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsDiagnostics.swift"; sourceTree = "<group>"; };
@@ -88,6 +91,7 @@
 		A4BE38F1B29E4C2C0E193EBD /* PianoArranger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PianoArranger.swift"; sourceTree = "<group>"; };
 		441AB21DAB3279DA563F7A30 /* SongGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongGenerator.swift"; sourceTree = "<group>"; };
 		D2D0517CAA37A3AA185ECA6F /* SongStructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongStructure.swift"; sourceTree = "<group>"; };
+		D33BD12ED639F964043E3CD5 /* TOTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TOTP.swift"; sourceTree = "<group>"; };
 		24CB3C2EB7B2F7D2272C4C58 /* DJController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJController.swift"; sourceTree = "<group>"; };
 		DA205542BF0CFE22FED80B38 /* DJView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJView.swift"; sourceTree = "<group>"; };
 		592D1037FE8DD7227FD6753F /* Deck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Deck.swift"; sourceTree = "<group>"; };
@@ -164,6 +168,7 @@
 				3F68FA4ED2C6EB6535CDDAB0,
 				586C48A1E73175CB24E1C4F1,
 				A6B2A5332B811656C786B90F,
+				57B8E5612C2FB2B83F9FE63F,
 				9104604AA09356FB292910A6,
 				307C5EC30768D401BF74343A,
 				7C6751B52A8511D49561996D,
@@ -173,6 +178,7 @@
 				A4BE38F1B29E4C2C0E193EBD,
 				441AB21DAB3279DA563F7A30,
 				D2D0517CAA37A3AA185ECA6F,
+				D33BD12ED639F964043E3CD5,
 			); path = "Core"; sourceTree = "<group>"; };
 		B821D638A64C97AF6A4771C9 /* DJ */ = {isa = PBXGroup; children = (
 				24CB3C2EB7B2F7D2272C4C58,
@@ -261,6 +267,7 @@
 				FB1AE0D81BBF2E6588167073,
 				304AF6FF922E55EC92BE272C,
 				4CA8CAFB49BEAFFE7167493E,
+				E12D8EE39F0A31480C6BE56B,
 				FF03C86ABA8991909F4BC2AA,
 				4E3E10CABF8E8C4BE16EB1DE,
 				DD3DA858C0E8879A2CF26680,
@@ -270,6 +277,7 @@
 				BF510B445E2793ACDA7FAD1F,
 				20346EBEEA040F31B5455B01,
 				FB36361C06063B35477BD57F,
+				3874FB597C4F26FA930C1348,
 				84C13AFEA160D4E0A33ADECD,
 				2B53ABC965C72CF6977D59FF,
 				1EC1CBA1A062BE26D7951B5E,
