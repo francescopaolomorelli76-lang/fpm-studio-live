@@ -107,9 +107,7 @@ enum AudioDecode {
         try checkAccess(url)
         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
         let stamp = Int((attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
-        let key = "\(url.path)|\(stamp)".data(using: .utf8)!.base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
-        let stem = "audio-" + String(key.suffix(80))
+        let stem = "audio-" + StableHash.hex("\(url.path)|\(stamp)")
         let cached = AppPaths.renderCache.appendingPathComponent(stem + ".caf")
         if FileManager.default.fileExists(atPath: cached.path), (try? AVAudioFile(forReading: cached)) != nil { return cached }
 
@@ -141,9 +139,7 @@ enum AudioDecode {
         if inFmt.sampleRate == format.sampleRate && inFmt.channelCount == format.channelCount { return url }
         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
         let stamp = Int((attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
-        let key = "\(url.path)|\(stamp)|\(Int(format.sampleRate))".data(using: .utf8)!.base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
-        let dest = AppPaths.renderCache.appendingPathComponent("motore-" + String(key.suffix(80)) + ".caf")
+        let dest = AppPaths.renderCache.appendingPathComponent("motore-" + StableHash.hex("\(url.path)|\(stamp)|\(Int(format.sampleRate))") + ".caf")
         if FileManager.default.fileExists(atPath: dest.path), (try? AVAudioFile(forReading: dest)) != nil { return dest }
         guard let conv = AVAudioConverter(from: inFmt, to: format) else { throw RenderError.engine("conversione di formato") }
         try? FileManager.default.removeItem(at: dest)
@@ -290,9 +286,7 @@ enum MediaResolver {
     }
 
     private static func fromZip(_ url: URL) throws -> Media {
-        let key = url.path.data(using: .utf8)!.base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
-        let dir = AppPaths.renderCache.appendingPathComponent("zip-" + String(key.suffix(60)), isDirectory: true)
+        let dir = AppPaths.renderCache.appendingPathComponent("zip-" + StableHash.hex(url.path), isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let p = Process()

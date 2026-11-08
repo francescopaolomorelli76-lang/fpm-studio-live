@@ -178,7 +178,7 @@ final class AIStudioModel: ObservableObject {
                                       "Jazz", "Classical", "Piano Ballad", "Acoustic", "Country", "Folk", "Metal", "Soul", "Gospel", "Latin",
                                       "Reggaeton", "Cinematic", "Bossa Nova", "Valzer", "Liscio", "Funk"]
     static let negativeTags: [String] = ["Batteria", "Basso", "Pianoforte", "Chitarra", "Archi", "Synth", "Fiati"]
-    static let durations: [(String, Double)] = [("Auto", 0), ("Reels (15s)", 15), ("Breve (30s)", 30), ("1 Minuto", 60), ("2 Minuti", 120), ("3 Minuti", 180)]
+    static let durations: [(String, Double)] = [("Auto", 0), ("Reels (15s)", 15), ("Breve (30s)", 30), ("1 Minuto", 60), ("2 Minuti", 120), ("3 Minuti", 180), ("4 Minuti", 240), ("5 Minuti", 300)]
 
     var folder: URL {
         let u = AppPaths.exports.appendingPathComponent("AI Studio", isDirectory: true)
@@ -489,6 +489,19 @@ struct AIStudioView: View {
                 ForEach(AIStudioModel.durations, id: \.0) { d in
                     Chip(text: d.1 == 0 && model.req.source == .reference ? "Come l'originale" : d.0, selected: model.req.duration == d.1) { model.req.duration = d.1 }
                 }
+            }
+            // Durata libera, a piacere (minuti e secondi).
+            HStack {
+                Text("Durata a piacere:").font(.caption)
+                Stepper("\(Int(model.req.duration) / 60) min", value: Binding(get: { Int(model.req.duration) / 60 },
+                        set: { model.req.duration = Double($0 * 60 + Int(model.req.duration) % 60) }), in: 0...15).font(.caption)
+                Stepper("\(Int(model.req.duration) % 60) s", value: Binding(get: { Int(model.req.duration) % 60 },
+                        set: { model.req.duration = Double((Int(model.req.duration) / 60) * 60 + $0) }), in: 0...55, step: 5).font(.caption)
+                Text(model.req.duration == 0 ? "automatica" : formatTime(model.req.duration)).font(.caption).monospacedDigit().foregroundColor(Theme.cyan)
+            }
+            if model.provider != .local && model.req.duration > model.provider.maxSeconds {
+                Text("\(model.provider.label) crea al massimo \(formatTime(model.provider.maxSeconds)) per richiesta: il brano verrà accorciato a quella durata.")
+                    .font(.caption).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true)
             }
             Text(model.req.source == .reference ? "Con una traccia la struttura viene accorciata per stare nella durata." :
                     "Con un testo, \"Auto\" adatta la durata alle strofe.").font(.caption).foregroundColor(Theme.soft)

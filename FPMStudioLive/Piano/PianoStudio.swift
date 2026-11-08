@@ -36,21 +36,21 @@ final class PianoStudioModel: ObservableObject {
     @Published private(set) var analysis: ChordEngine.Analysis?
     @Published var sections: [SongSection] = []
     @Published var selected: Set<UUID> = []
-    @Published var options = PianoOptions() { didSet { if options != oldValue { generated = nil } } }
+    @Published var options = PianoOptions() { didSet { if options != oldValue { generated = nil; scheduleRefresh() } } }
     /// Traccia della melodia da togliere (riconosciuta automaticamente, modificabile).
-    @Published var melodyChannel: Int? { didSet { generated = nil } }
+    @Published var melodyChannel: Int? { didSet { generated = nil; scheduleRefresh() } }
     @Published private(set) var channelNames: [(ch: Int, name: String)] = []
-    @Published var transpose = 0
-    @Published var tempo = 1.0
+    @Published var transpose = 0 { didSet { scheduleRefresh() } }
+    @Published var tempo = 1.0 { didSet { scheduleRefresh() } }
     @Published var mastering: Mastering.Mode = .pro
     @Published var format: ExportFormat = .mp3
     @Published var scope: Scope = .whole
-    @Published var reverb: Double = 0
+    @Published var reverb: Double = 0 { didSet { scheduleRefresh() } }
     /// SoundFont del pianoforte, indipendente dal karaoke ("" = lo stesso del karaoke).
     @Published var pianoSoundFont = UserDefaults.standard.string(forKey: "pianoSoundFont") ?? "" {
-        didSet { UserDefaults.standard.set(pianoSoundFont, forKey: "pianoSoundFont") }
+        didSet { UserDefaults.standard.set(pianoSoundFont, forKey: "pianoSoundFont"); scheduleRefresh() }
     }
-    @Published var listenMode: ListenMode = .piano
+    @Published var listenMode: ListenMode = .piano { didSet { if listenMode != oldValue { scheduleRefresh(immediate: true) } } }
     @Published private(set) var busy = false
     @Published private(set) var progress = 0.0
     @Published var status = ""
@@ -100,6 +100,8 @@ final class PianoStudioModel: ObservableObject {
     /// Apre un MIDI/KAR oppure un brano audio (MP3, M4A, WAV, ZIP MP3+G).
     func open(_ url: URL) {
         preview.stop()
+        loadingSong = true
+        defer { DispatchQueue.main.async { self.loadingSong = false } }
         if SongKind.of(url) == .midi { openMIDI(url) } else { openAudio(url) }
     }
 
@@ -153,6 +155,8 @@ final class PianoStudioModel: ObservableObject {
                                                         chords: r.chords, vocalTimes: [], density: r.barEnergy)
                 let secs = SongStructureAnalyzer.analyze(input)
                 DispatchQueue.main.async {
+                    self.loadingSong = true
+                    defer { DispatchQueue.main.async { self.loadingSong = false } }
                     self.busy = false
                     self.sourceURL = url
                     self.sourceIsAudio = true
@@ -204,7 +208,29 @@ final class PianoStudioModel: ObservableObject {
         return try? MIDIFile(data: w.data())
     }
 
-    func sectionsChanged() { generated = nil; renumber() }
+    func sectionsChanged() { generated = nil; renumber(); scheduleRefresh() }
+
+    // MARK: Anteprima automatica: ogni modifica si ascolta subito, prima di creare la base.
+
+    private var refreshWork: DispatchWorkItem?
+    @Published private(set) var previewNote = ""
+
+    private func scheduleRefresh(immediate: Bool = false) {
+        guard sourceURL != nil, midi != nil, !loadingSong else { return }
+        refreshWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            let at = self.preview.url != nil ? self.preview.songPosition : 0
+            self.previewNote = "Anteprima aggiornata: \(self.listenMode.label) · \(self.options.style.label) · " +
+                (self.options.simplifyToTriads ? "solo maggiori e minori" : "accordi originali") +
+                (self.transpose != 0 ? " · tono \(self.transpose > 0 ? "+" : "")\(self.transpose)" : "") +
+                (abs(self.tempo - 1) > 0.001 ? " · tempo \(Int(self.tempo * 100))%" : "")
+            self.startPreview(at: at)
+        }
+        refreshWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + (immediate ? 0.05 : 0.7), execute: w)
+    }
+    private var loadingSong = false
 
     private func renumber() {
         var c: [SectionKind: Int] = [:]
@@ -352,6 +378,9 @@ struct PianoStudioView: View {
                         Button("Da capo") { model.startPreview(at: 0) }.buttonStyle(NeonButtonStyle(prominent: false)).disabled(model.midi == nil)
                     }
                     MiniPlayerView(player: model.preview, acceptsDrop: false)
+                    if !model.previewNote.isEmpty {
+                        Text(model.previewNote).font(.caption).foregroundColor(Theme.cyan).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Panel(title: "Struttura riconosciuta — scegli le parti", icon: "rectangle.split.3x1") {
                     if model.sections.isEmpty {

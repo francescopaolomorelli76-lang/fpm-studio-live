@@ -258,13 +258,18 @@ struct SongSidecar: Codable {
     }
 
     private static func fallbackURL(for song: URL) -> URL {
+        AppPaths.sidecars.appendingPathComponent(StableHash.hex(song.path) + ".json")
+    }
+
+    /// Nome usato dalle versioni precedenti (solo per rileggere i file già salvati).
+    private static func legacyFallbackURL(for song: URL) -> URL {
         let key = song.path.data(using: .utf8)!.base64EncodedString()
             .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
         return AppPaths.sidecars.appendingPathComponent(String(key.suffix(120)) + ".json")
     }
 
     static func load(for song: URL) -> SongSidecar? {
-        for u in [url(for: song), fallbackURL(for: song)] {
+        for u in [url(for: song), fallbackURL(for: song), legacyFallbackURL(for: song)] {
             if let d = try? Data(contentsOf: u), let s = try? JSONDecoder().decode(SongSidecar.self, from: d) { return s }
         }
         return nil
@@ -298,5 +303,17 @@ enum AppPaths {
         let u = support.appendingPathComponent(n, isDirectory: true)
         try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
         return u
+    }
+}
+
+/// Impronta stabile di una stringa (due FNV-1a a 64 bit, 32 cifre esadecimali): nomi di cache unici per ogni chiave.
+enum StableHash {
+    static func hex(_ s: String) -> String {
+        var h1: UInt64 = 0xcbf29ce484222325, h2: UInt64 = 0x84222325cbf29ce4
+        for b in s.utf8 {
+            h1 = (h1 ^ UInt64(b)) &* 0x100000001b3
+            h2 = (h2 ^ UInt64(b)) &* 0x100000001b3 &+ 0x9e3779b97f4a7c15
+        }
+        return String(format: "%016llx%016llx", h1, h2)
     }
 }

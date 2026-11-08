@@ -48,8 +48,7 @@ final class PreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     /// Rende un MIDI in audio (in background, con cache) e lo apre.
     func loadMIDI(_ midi: MIDIFile, key: String, title: String, settings: OfflineRenderer.Settings, autoplay: Bool = true, onReady: (() -> Void)? = nil) {
         stop()
-        let safe = key.data(using: .utf8)!.base64EncodedString().replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
-        let dest = AppPaths.renderCache.appendingPathComponent("anteprima-" + String(safe.suffix(90)) + ".m4a")
+        let dest = AppPaths.renderCache.appendingPathComponent("anteprima-" + StableHash.hex(key) + ".m4a")
         let scale = settings.tempo
         if FileManager.default.fileExists(atPath: dest.path) {
             load(dest, title: title, autoplay: autoplay); timeScale = scale; onReady?(); return
