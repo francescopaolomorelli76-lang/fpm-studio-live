@@ -1,5 +1,4 @@
 import Foundation
-import Security
 import AVFoundation
 
 /// Generatori musicali AI esterni collegati all'AI Studio.
@@ -56,23 +55,25 @@ enum MusicProvider: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// Portachiavi del Mac per le chiavi dei servizi.
+/// Chiavi dei servizi in un file privato dell'app (permessi 600: solo il tuo utente del Mac può leggerlo).
+/// Non si usa il Portachiavi perché l'app non è firmata da Apple: ogni aggiornamento chiederebbe la password.
 enum Keychain {
+    private static var file: URL { AppPaths.support.appendingPathComponent("chiavi-servizi.json") }
+
+    private static func all() -> [String: String] {
+        guard let d = try? Data(contentsOf: file), let m = try? JSONDecoder().decode([String: String].self, from: d) else { return [:] }
+        return m
+    }
+
     static func set(_ value: String, for key: String) {
-        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "FPM Studio Live", kSecAttrAccount as String: key]
-        SecItemDelete(base as CFDictionary)
-        guard !value.isEmpty else { return }
-        var add = base
-        add[kSecValueData as String] = Data(value.utf8)
-        SecItemAdd(add as CFDictionary, nil)
+        var m = all()
+        m[key] = value.isEmpty ? nil : value
+        guard let d = try? JSONEncoder().encode(m) else { return }
+        try? d.write(to: file, options: [.atomic])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
-    static func get(_ key: String) -> String {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "FPM Studio Live", kSecAttrAccount as String: key,
-                                kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return "" }
-        return String(decoding: d, as: UTF8.self)
-    }
+
+    static func get(_ key: String) -> String { all()[key] ?? "" }
 }
 
 enum MusicProviderError: LocalizedError {

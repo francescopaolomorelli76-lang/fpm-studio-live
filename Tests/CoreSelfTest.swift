@@ -269,3 +269,13 @@ func runFollowTest() {
     let match = pianoOn.filter { p in origOn.contains { abs($0 - p) <= 8 } }.count
     print("Segue l'originale: attacchi piano \(pianoOn.count), coincidenti con l'originale \(match); durata \(String(format: "%.2f", out.duration)) vs \(String(format: "%.2f", midi.duration)); tempi \(out.tempoMap.count) vs \(midi.tempoMap.count)")
 }
+
+func runFakeLyricsTest() {
+    var w = MIDIWriter(ppq: 480)
+    var ev: [MIDIWriter.TrackEvent] = []
+    for (i, n) in ["Ch1: Piano", "Ch2: Bass", "Ch7: Glockenspiel", "Ch8: Low Strings", "Ch9: High Strings", "Ch10: Drums Set"].enumerated() { ev.append(.init(tick: i * 10, bytes: MIDIWriter.text(0x01, n))) }
+    w.addTrack("Info", ev)
+    w.addTrack("Note", [.init(tick: 0, bytes: [0x90, 60, 90]), .init(tick: 48000, bytes: [0x80, 60, 0])])
+    let l = try! MIDIFile(data: w.data()).karaokeLyrics()
+    print("nomi dei canali scambiati per testo:", l.lines.count, "righe (deve essere 0)")
+}

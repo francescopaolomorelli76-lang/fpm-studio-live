@@ -287,6 +287,18 @@ final class MIDIFile {
             let breaks = g.filter { $0.1.hasPrefix("/") || $0.1.hasPrefix("\\") || $0.1.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }.count
             return Double(distinct) + Double(min(breaks, 20)) * 0.5 + (k.hasPrefix("5-") ? 2 : 0)
         }
+        // Non è testo cantato: eventi tutti all'inizio (nomi di strumenti/canali, copyright, note del sequencer).
+        func looksLikeLyrics(_ g: [(Int, String)]) -> Bool {
+            guard let a = g.first?.0, let z = g.last?.0 else { return false }
+            if seconds(atTick: z) - seconds(atTick: a) < 3 { return false }
+            let technical = g.filter { t in
+                let s = t.1.trimmingCharacters(in: .whitespaces)
+                return s.range(of: #"^(ch|channel|canale|track|traccia)\s*\d+\s*[:\-]"#, options: [.regularExpression, .caseInsensitive]) != nil
+                    || s.lowercased().hasPrefix("copyright") || s.hasPrefix("(c)")
+            }.count
+            return Double(technical) < Double(g.count) * 0.3
+        }
+        groups = groups.filter { looksLikeLyrics($0.value) }
         guard let best = groups.max(by: { score($0.key, $0.value) < score($1.key, $1.value) }), best.value.count >= 3 else {
             // Basi M-Live (le originali di Win Live): testo e accordi nei SysEx M-Live.
             let ml = mLiveLyrics()

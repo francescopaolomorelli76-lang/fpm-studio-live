@@ -71,7 +71,7 @@ final class AIStudioModel: ObservableObject {
     var aiPrompt: String {
         var p: [String] = []
         p.append(resolvedStyles.map { $0.label.lowercased() }.joined(separator: ", ") + " song")
-        if !req.styleText.isEmpty { p.append(req.styleText) }
+        for w in req.styleText.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces).lowercased() }) where !w.isEmpty && !p[0].contains(w) { p.append(w) }
         if !mood.isEmpty { p.append(mood) }
         let bpm = autoBPM ? (reference?.bpm ?? resolvedStyles[0].defaultBPM) : manualBPM
         p.append("\(Int(bpm.rounded())) bpm")
@@ -81,6 +81,8 @@ final class AIStudioModel: ObservableObject {
         if !neg.isEmpty { p.append("no " + neg.map { ["drums": "drums", "bass": "bass", "piano": "piano", "guitar": "guitar", "strings": "strings", "pad": "synths", "brass": "brass", "lead": "lead"][$0.rawValue] ?? $0.rawValue }.joined(separator: ", no ")) }
         if req.vocal == .instrumental || !provider.supportsVocals { p.append("instrumental") }
         p.append("high quality, professional studio mix, clear structure with intro, verse and chorus")
+        var seen = Set<String>()
+        p = p.filter { seen.insert($0.lowercased()).inserted }
         return p.joined(separator: ", ")
     }
 
@@ -136,7 +138,10 @@ final class AIStudioModel: ObservableObject {
     /// Suno non offre un collegamento ufficiale per altre app: preparo stile e testo pronti da incollare in suno.com.
     var sunoStyle: String {
         var parts = resolvedStyles.map { $0.label }
-        if !req.styleText.isEmpty { parts.append(req.styleText) }
+        // Parole dello stile scritte a mano, senza ripetere quelle già presenti (niente "Rock, Rock").
+        for w in req.styleText.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }) where !w.isEmpty {
+            if !parts.contains(where: { $0.lowercased() == w.lowercased() }) { parts.append(w) }
+        }
         if let r = result { parts.append("\(Int(r.bpm.rounded())) BPM"); parts.append(KeyDetector.name(root: r.keyRoot, minor: r.minor, notation: .english)) }
         else if !autoBPM { parts.append("\(Int(manualBPM)) BPM") }
         if req.vocal == .instrumental { parts.append("instrumental") }
