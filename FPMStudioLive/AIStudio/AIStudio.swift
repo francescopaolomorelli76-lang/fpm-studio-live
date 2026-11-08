@@ -494,7 +494,7 @@ struct AIStudioView: View {
             HStack {
                 Text("Durata a piacere:").font(.caption)
                 Stepper("\(Int(model.req.duration) / 60) min", value: Binding(get: { Int(model.req.duration) / 60 },
-                        set: { model.req.duration = Double($0 * 60 + Int(model.req.duration) % 60) }), in: 0...15).font(.caption)
+                        set: { model.req.duration = Double($0 * 60 + Int(model.req.duration) % 60) }), in: 0...60).font(.caption)
                 Stepper("\(Int(model.req.duration) % 60) s", value: Binding(get: { Int(model.req.duration) % 60 },
                         set: { model.req.duration = Double((Int(model.req.duration) / 60) * 60 + $0) }), in: 0...55, step: 5).font(.caption)
                 Text(model.req.duration == 0 ? "automatica" : formatTime(model.req.duration)).font(.caption).monospacedDigit().foregroundColor(Theme.cyan)
