@@ -74,8 +74,17 @@ final class PreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    private lazy var sourceID = "anteprima-\(ObjectIdentifier(self).hashValue)"
+    private var exclusiveObserver: NSObjectProtocol?
+
     func play() {
         guard let p = player else { return }
+        if exclusiveObserver == nil {
+            exclusiveObserver = ExclusivePlayback.observe({ [weak self] in self?.sourceID ?? "" }) { [weak self] in
+                if self?.isPlaying == true { self?.pause() }
+            }
+        }
+        ExclusivePlayback.announce(sourceID)
         p.play()
         isPlaying = true
         timer?.invalidate()
@@ -116,6 +125,7 @@ final class PreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
 struct MiniPlayerView: View {
     @ObservedObject var player: PreviewPlayer
     var accent: Color = Theme.cyan
+    var acceptsDrop = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -138,9 +148,9 @@ struct MiniPlayerView: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.bg2))
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+        .onDrop(of: acceptsDrop ? [.fileURL] : [], isTargeted: nil) { providers in
             DropHelper.urls(from: providers) { urls in if let u = urls.first { player.load(u, autoplay: true) } }
-            return true
+            return acceptsDrop
         }
     }
 }

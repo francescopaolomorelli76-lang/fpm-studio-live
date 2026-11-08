@@ -82,6 +82,11 @@ final class KaraokePlayer: ObservableObject {
         hub.synthReverb.wetDryMix = Float(settings.synthReverb)
         AudioHub.configureSynthEQ(hub.synthEQ, enabled: settings.synthEQ)
         hub.sequencer.onEnd = { [weak self] in self?.songEnded() }
+        ExclusivePlayback.observe({ "karaoke" }) { [weak self] in
+            guard let self = self, self.isPlaying else { return }
+            self.pause()
+            self.status = "In pausa: è partita un'altra riproduzione"
+        }
         fileAudio.onEnd = { [weak self] in self?.songEnded() }
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer!, forMode: .common)
@@ -222,6 +227,7 @@ final class KaraokePlayer: ObservableObject {
 
     func play() {
         guard let k = kind else { return }
+        ExclusivePlayback.announce("karaoke")
         hub.start()
         advanceWork?.cancel(); countdownToNext = nil
         switch k {

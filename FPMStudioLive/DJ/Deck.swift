@@ -59,6 +59,10 @@ final class Deck: ObservableObject, Identifiable {
         self.id = id
         self.nodes = nodes
         applyVolume()
+        ExclusivePlayback.observe({ "dj" }) { [weak self] in
+            guard let self = self, self.isPlaying else { return }
+            self.pause()
+        }
         NotificationCenter.default.addObserver(forName: AudioHub.restartedNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self = self, self.isPlaying else { return }
             self.updatePosition()
@@ -174,6 +178,7 @@ final class Deck: ObservableObject, Identifiable {
 
     func play(at when: AVAudioTime?) {
         guard let f = file, !isPlaying else { return }
+        ExclusivePlayback.announce("dj")
         AudioHub.shared.start()
         let remaining = AVAudioFrameCount(max(0, f.length - startFrame))
         guard remaining > 0 else { return }

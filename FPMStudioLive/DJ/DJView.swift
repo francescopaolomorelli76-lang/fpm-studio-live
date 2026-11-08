@@ -5,13 +5,23 @@ struct DJView: View {
     @ObservedObject var dj: DJController
     @ObservedObject var library: Library
     @ObservedObject var settings = AppSettings.shared
+    @Environment(\.contentWidth) private var width
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                DeckView(deck: dj.deckA, other: dj.deckB, accent: Theme.cyan, dj: dj)
-                centerColumn.frame(width: 200)
-                DeckView(deck: dj.deckB, other: dj.deckA, accent: Theme.magenta, dj: dj)
+            if width >= 820 {
+                HStack(alignment: .top, spacing: 12) {
+                    DeckView(deck: dj.deckA, other: dj.deckB, accent: Theme.cyan, dj: dj)
+                    centerColumn.frame(width: 200)
+                    DeckView(deck: dj.deckB, other: dj.deckA, accent: Theme.magenta, dj: dj)
+                }
+            } else {
+                // Finestra stretta: ATOMIX in alto e i due deck uno sotto l'altro.
+                VStack(spacing: 12) {
+                    centerColumn
+                    DeckView(deck: dj.deckA, other: dj.deckB, accent: Theme.cyan, dj: dj)
+                    DeckView(deck: dj.deckB, other: dj.deckA, accent: Theme.magenta, dj: dj)
+                }
             }
             playlist
         }

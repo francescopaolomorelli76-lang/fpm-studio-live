@@ -49,12 +49,87 @@ final class AIStudioModel: ObservableObject {
 
     /// Ascolta un brano creato (MIDI → audio con i suoni scelti) nel lettore dell'AI Studio.
     func listen(_ u: URL) {
-        guard let m = try? MIDIFile(url: u) else { preview.load(u, autoplay: true); return }
+        guard SongKind.of(u) == .midi, let m = try? MIDIFile(url: u) else { preview.load(u, autoplay: true); return }
         var s = OfflineRenderer.Settings()
         s.soundBank = AppSettings.shared.soundFontURL
         s.sampleRate = 44100
         preview.loadMIDI(m, key: "ai|\(u.path)|\((try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)?.timeIntervalSince1970 ?? 0)|\(s.soundBank?.path ?? "")",
                          title: u.deletingPathExtension().lastPathComponent, settings: s, autoplay: true)
+    }
+
+    // MARK: Generatori AI esterni
+
+    @Published var provider: MusicProvider = MusicProvider(rawValue: UserDefaults.standard.string(forKey: "aiProvider") ?? "") ?? .huggingFace {
+        didSet { UserDefaults.standard.set(provider.rawValue, forKey: "aiProvider"); tokenInput = Keychain.get(provider.rawValue) }
+    }
+    @Published var tokenInput = ""
+    @Published var mood = ""
+
+    func saveToken() { Keychain.set(tokenInput.trimmingCharacters(in: .whitespacesAndNewlines), for: provider.rawValue); status = "Chiave salvata nel Portachiavi" }
+
+    /// Descrizione in inglese per i modelli AI, dai parametri scelti.
+    var aiPrompt: String {
+        var p: [String] = []
+        p.append(resolvedStyles.map { $0.label.lowercased() }.joined(separator: ", ") + " song")
+        if !req.styleText.isEmpty { p.append(req.styleText) }
+        if !mood.isEmpty { p.append(mood) }
+        let bpm = autoBPM ? (reference?.bpm ?? resolvedStyles[0].defaultBPM) : manualBPM
+        p.append("\(Int(bpm.rounded())) bpm")
+        if let k = req.keyRoot { p.append("in " + Chord.noteName(k, notation: .english, preferFlats: Chord.defaultPrefersFlat(k)) + ((req.minor ?? false) ? " minor" : " major")) }
+        else if let m = req.minor { p.append(m ? "minor key" : "major key") }
+        let neg = Instrument.fromNegativeText(req.negativeText)
+        if !neg.isEmpty { p.append("no " + neg.map { ["drums": "drums", "bass": "bass", "piano": "piano", "guitar": "guitar", "strings": "strings", "pad": "synths", "brass": "brass", "lead": "lead"][$0.rawValue] ?? $0.rawValue }.joined(separator: ", no ")) }
+        if req.vocal == .instrumental || !provider.supportsVocals { p.append("instrumental") }
+        p.append("high quality, professional studio mix, clear structure with intro, verse and chorus")
+        return p.joined(separator: ", ")
+    }
+
+    @Published private(set) var remoteBusy = false
+
+    /// Crea il brano con il servizio scelto e lo apre nel lettore dell'AI Studio.
+    func generateRemote() {
+        if provider == .local { generate(); return }
+        if provider == .suno { prepareForSuno = true; copyToPasteboard(sunoStyle); NSWorkspace.shared.open(URL(string: "https://suno.com/create")!); return }
+        if Keychain.get(provider.rawValue).isEmpty && !tokenInput.isEmpty { saveToken() }
+        let title = req.title.isEmpty ? "AI Studio \(Self.stamp())" : req.title
+        let seconds = req.duration > 0 ? req.duration : (reference?.duration ?? 60)
+        let refURL = req.source == .reference ? referenceURL : nil
+        let r0 = MusicGenerator.Request(provider: provider, prompt: aiPrompt, lyrics: req.lyrics, seconds: seconds,
+                                        melodyAudio: nil, destFolder: folder, title: title)
+        remoteBusy = true; busy = true; status = "Preparo la richiesta…"
+        Task {
+            do {
+                var r = r0
+                if let ref = refURL, provider == .replicate { r.melodyAudio = try? Self.melodyClip(ref) }
+                let url = try await MusicGenerator.generate(r) { msg in DispatchQueue.main.async { self.status = msg } }
+                await MainActor.run {
+                    self.remoteBusy = false; self.busy = false
+                    self.resultURL = url
+                    self.status = "Creato con \(self.provider.label): \(url.lastPathComponent)"
+                    self.refreshHistory()
+                    self.preview.load(url, autoplay: true)
+                }
+            } catch {
+                await MainActor.run { self.remoteBusy = false; self.busy = false; self.status = error.localizedDescription }
+            }
+        }
+    }
+
+    /// Primi 30 secondi della traccia di riferimento in M4A (melodia guida per MusicGen).
+    static func melodyClip(_ u: URL) throws -> URL {
+        let dest = AppPaths.renderCache.appendingPathComponent("melodia-guida.m4a")
+        var audio: RenderedAudio
+        if SongKind.of(u) == .midi {
+            var s = OfflineRenderer.Settings(); s.soundBank = AppSettings.shared.soundFontURL; s.pluginID = nil
+            let full = try OfflineRenderer.render(try MIDIFile(url: u), settings: s) { _ in }
+            audio = full.slice(from: 0, to: 30, fadeOut: 0.3)
+        } else {
+            let a = try AudioDecode.playableURL(MediaResolver.resolve(u).audio)
+            let (l, r) = try MedleyCreator.decodeStereo(a, sr: 32000, from: 0, to: 30)
+            audio = RenderedAudio(left: l, right: r, sampleRate: 32000)
+        }
+        try AudioExporter.write(audio, to: dest, format: .m4a)
+        return dest
     }
 
     // MARK: Suno
@@ -113,12 +188,13 @@ final class AIStudioModel: ObservableObject {
 
     init() {
         req.seed = UInt64(Date().timeIntervalSince1970)
+        tokenInput = Keychain.get(provider.rawValue)
         refreshHistory()
     }
 
     func refreshHistory() {
         history = ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [])
-            .filter { $0.pathExtension == "mid" }
+            .filter { ["mid", "mp3", "wav", "flac", "m4a", "ogg"].contains($0.pathExtension.lowercased()) }
             .sorted { ($0.modificationDate ?? .distantPast) > ($1.modificationDate ?? .distantPast) }
     }
 
@@ -278,9 +354,10 @@ struct AIStudioView: View {
     @ObservedObject var player: KaraokePlayer
     @ObservedObject var library: Library
     var openKaraoke: () -> Void
+    @Environment(\.contentWidth) private var width
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        AdaptiveColumns(width: width, threshold: 760, rightWidth: max(420, width - 270)) {
             VStack(spacing: 12) {
                 Panel(title: "Info progetto", icon: "info.circle") {
                     Text("TITOLO PROGETTO").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.soft)
@@ -324,12 +401,10 @@ struct AIStudioView: View {
                     }
                 }
             }.frame(width: 250)
-
+        } right: {
             VStack(alignment: .leading, spacing: 12) {
                 Panel(title: model.step.label, icon: model.step.icon) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 14) { stepContent }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    VStack(alignment: .leading, spacing: 14) { stepContent }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack {
                     Button(action: { model.reset() }) { Label("Annulla", systemImage: "xmark") }.buttonStyle(NeonButtonStyle(prominent: false))
@@ -340,7 +415,7 @@ struct AIStudioView: View {
                     if model.busy { ProgressView(value: model.progress).frame(width: 160) }
                     Text(model.status).font(.caption).foregroundColor(Theme.cyan).lineLimit(1)
                     if model.step == .summary {
-                        Button(action: { model.generate() }) { Label("Crea il brano", systemImage: "wand.and.stars") }
+                        Button(action: { model.generateRemote() }) { Label(model.provider == .suno ? "Prepara per Suno" : "Crea il brano", systemImage: "wand.and.stars") }
                             .buttonStyle(NeonButtonStyle()).disabled(model.busy || model.analyzingReference)
                     } else {
                         Button(action: { if let n = AIStudioModel.Step(rawValue: model.step.rawValue + 1) { model.step = n } }) {
@@ -508,6 +583,26 @@ struct AIStudioView: View {
             summaryRow("Stile", model.resolvedStyles.map { $0.label }.joined(separator: ", ") + (model.autoBPM ? " · BPM auto" : " · \(Int(model.manualBPM)) BPM"))
             if !r.negativeText.isEmpty { summaryRow("Senza", r.negativeText) }
             summaryRow("Testo", r.lyrics.isEmpty ? "nessuno" : "\(SongGenerator.paragraphs(r.lyrics).count) strofe")
+            Panel(title: "Motore di generazione", icon: "sparkles") {
+                Picker("", selection: $model.provider) { ForEach(MusicProvider.allCases) { Text($0.label).tag($0) } }
+                    .pickerStyle(.radioGroup).labelsHidden()
+                Text("\(model.provider.cost) · \(model.provider.detail)").font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true)
+                if model.provider.needsToken {
+                    HStack {
+                        SecureField("Chiave del servizio (token)", text: $model.tokenInput).textFieldStyle(.roundedBorder)
+                        Button("Salva") { model.saveToken() }.buttonStyle(NeonButtonStyle(prominent: false))
+                        if let u = model.provider.tokenPage { Button("Ottieni la chiave") { NSWorkspace.shared.open(u) }.buttonStyle(NeonButtonStyle(prominent: false)) }
+                    }
+                    Text("Descrizione inviata all'AI: \(model.aiPrompt)").font(.system(size: 10, design: .monospaced)).foregroundColor(Theme.soft)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    if !model.provider.supportsVocals && model.req.vocal == .guideMelody {
+                        Text("Questo motore crea solo musica strumentale: per un brano cantato usa ElevenLabs o Suno.").font(.caption).foregroundColor(Theme.warn)
+                    }
+                    if model.provider == .replicate && model.req.source == .reference {
+                        Text("La tua traccia viene usata come melodia guida (primi 30 secondi).").font(.caption).foregroundColor(Theme.cyan)
+                    }
+                }
+            }
             summaryRow("Suoni", AppSettings.shared.soundFontName)
             Toggle("Prepara anche per Suno (stile e testo pronti da incollare nel tuo account)", isOn: $model.prepareForSuno).toggleStyle(.checkbox)
             if model.prepareForSuno {

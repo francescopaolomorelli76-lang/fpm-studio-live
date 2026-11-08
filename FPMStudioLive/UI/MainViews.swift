@@ -47,29 +47,35 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            // La barra in alto resta sempre visibile: se la finestra è piccola, il contenuto scorre sotto.
+            // La barra in alto resta sempre visibile; sotto, ogni sezione si adatta alla finestra
+            // (colonne affiancate o una sotto l'altra) e scorre in verticale se serve.
             GeometryReader { geo in
-                ScrollView([.vertical, .horizontal]) {
-                    HStack(spacing: 12) {
-                        if showLibrary {
-                            LibraryView(library: library, player: player, dj: dj, piano: piano, ai: ai, section: $section)
-                                .frame(width: 270)
-                        }
-                        Group {
-                            switch section {
-                            case .karaoke: KaraokeView(player: player, library: library, mic: mic)
-                            case .dj: DJView(dj: dj, library: library)
-                            case .piano: PianoStudioView(model: piano)
-                            case .ai: AIStudioView(model: ai, player: player, library: library) { section = .karaoke }
-                            case .advanced: AdvancedView(player: player, sampler: sampler, multitrack: multitrack, medley: medley,
-                                                         background: background, web: web, recorder: recorder, shortcuts: shortcuts)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                let libWidth: CGFloat = showLibrary ? (geo.size.width < 1000 ? 220 : 270) : 0
+                let contentWidth = geo.size.width - libWidth - 24 - (showLibrary ? 12 : 0)
+                HStack(alignment: .top, spacing: 12) {
+                    if showLibrary {
+                        LibraryView(library: library, player: player, dj: dj, piano: piano, ai: ai, section: $section)
+                            .frame(width: libWidth)
                     }
-                    .padding(12)
-                    .frame(width: max(geo.size.width, 900), height: max(geo.size.height, 560))
+                    Group {
+                        switch section {
+                        case .karaoke:
+                            KaraokeView(player: player, library: library, mic: mic)
+                        case .dj:
+                            ScrollView(.vertical) { DJView(dj: dj, library: library).padding(.trailing, 6) }
+                        case .piano:
+                            ScrollView(.vertical) { PianoStudioView(model: piano).padding(.trailing, 6) }
+                        case .ai:
+                            ScrollView(.vertical) { AIStudioView(model: ai, player: player, library: library) { section = .karaoke }.padding(.trailing, 6) }
+                        case .advanced:
+                            AdvancedView(player: player, sampler: sampler, multitrack: multitrack, medley: medley,
+                                         background: background, web: web, recorder: recorder, shortcuts: shortcuts)
+                        }
+                    }
+                    .environment(\.contentWidth, contentWidth)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
+                .padding(12)
             }
         }
         .background(Theme.background.ignoresSafeArea())

@@ -23,7 +23,7 @@ final class PianoStudioModel: ObservableObject {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .original: return "Originale"
+            case .original: return "Originale (MIDI)"
             case .piano: return "Pianoforte"
             case .pianoMelody: return "Piano + melodia"
             }
@@ -327,9 +327,10 @@ struct PianoStudioView: View {
     @ObservedObject var model: PianoStudioModel
     @EnvironmentObject var player: KaraokePlayer
     @ObservedObject var settings = AppSettings.shared
+    @Environment(\.contentWidth) private var width
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        AdaptiveColumns(width: width, threshold: 860, rightWidth: 330) {
             VStack(spacing: 12) {
                 Panel(title: "Brano (MIDI o audio)", icon: "pianokeys") {
                     HStack {
@@ -342,13 +343,15 @@ struct PianoStudioView: View {
                     if !model.status.isEmpty { Text(model.status).font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true) }
                     // Lettore dedicato: ascolti l'originale o il pianoforte mentre lavori, senza toccare il karaoke.
                     HStack {
-                        Picker("", selection: $model.listenMode) { ForEach(PianoStudioModel.ListenMode.allCases) { Text($0.label).tag($0) } }
-                            .pickerStyle(.segmented).labelsHidden().frame(width: 300)
+                        Picker("", selection: $model.listenMode) {
+                            ForEach(PianoStudioModel.ListenMode.allCases.filter { !(model.sourceIsAudio && $0 != .piano) }) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 330)
                         Button(model.previewing ? "Pausa" : "Ascolta") { model.togglePreview() }
                             .buttonStyle(NeonButtonStyle()).disabled(model.midi == nil)
                         Button("Da capo") { model.startPreview(at: 0) }.buttonStyle(NeonButtonStyle(prominent: false)).disabled(model.midi == nil)
                     }
-                    MiniPlayerView(player: model.preview)
+                    MiniPlayerView(player: model.preview, acceptsDrop: false)
                 }
                 Panel(title: "Struttura riconosciuta — scegli le parti", icon: "rectangle.split.3x1") {
                     if model.sections.isEmpty {
@@ -402,6 +405,7 @@ struct PianoStudioView: View {
                     }
                 }
             }
+        } right: {
             VStack(spacing: 12) {
                 Panel(title: "Tipo di base", icon: "square.stack.3d.up") {
                     Picker("", selection: $model.options.mode) { ForEach(AccompanimentMode.allCases) { Text($0.label).tag($0) } }
@@ -450,7 +454,7 @@ struct PianoStudioView: View {
                     }
                     if model.busy { ProgressView(value: model.progress).accentColor(Theme.violet) }
                 }
-            }.frame(width: 340)
+            }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             DropHelper.urls(from: providers) { urls in

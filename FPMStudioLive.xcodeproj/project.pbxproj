@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		48290134E5BBA6453CE71005 /* AIStudio.swift */ = {isa = PBXBuildFile; fileRef = D809DF305EB104671D6DBE93; };
+		8C6491BB2611F3CC17D413A8 /* MusicProviders.swift */ = {isa = PBXBuildFile; fileRef = C7BE61CEC4D58B00F911F4C1; };
 		C68BDD2DBB3A87BC3A710190 /* AdvancedView.swift */ = {isa = PBXBuildFile; fileRef = F9314390A9BCD83527F4F7B2; };
 		F7D07AC009AAC71D2A4FCF54 /* LiveAudio.swift */ = {isa = PBXBuildFile; fileRef = 6D3A954FC24B20E792F55D3E; };
 		90901DB02732E3E58950978B /* Shortcuts.swift */ = {isa = PBXBuildFile; fileRef = 850ED252EE7A8BE33D89BC71; };
@@ -57,6 +58,7 @@
 /* Begin PBXFileReference section */
 		41138744E6ECCFFFBF3BBDA0 /* FPM Studio Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FPM Studio Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D809DF305EB104671D6DBE93 /* AIStudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIStudio.swift"; sourceTree = "<group>"; };
+		C7BE61CEC4D58B00F911F4C1 /* MusicProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MusicProviders.swift"; sourceTree = "<group>"; };
 		F9314390A9BCD83527F4F7B2 /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AdvancedView.swift"; sourceTree = "<group>"; };
 		6D3A954FC24B20E792F55D3E /* LiveAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveAudio.swift"; sourceTree = "<group>"; };
 		850ED252EE7A8BE33D89BC71 /* Shortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shortcuts.swift"; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 			); path = "FPMStudioLive"; sourceTree = "<group>"; };
 		DCB0714900BC9F7F1836A94A /* AIStudio */ = {isa = PBXGroup; children = (
 				D809DF305EB104671D6DBE93,
+				C7BE61CEC4D58B00F911F4C1,
 			); path = "AIStudio"; sourceTree = "<group>"; };
 		9C82C6E8121A3A38CD2D9410 /* Advanced */ = {isa = PBXGroup; children = (
 				F9314390A9BCD83527F4F7B2,
@@ -237,6 +240,7 @@
 /* Begin PBXSourcesBuildPhase section */
 		F2AB5FB218DA8B84623F4557 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 				48290134E5BBA6453CE71005,
+				8C6491BB2611F3CC17D413A8,
 				C68BDD2DBB3A87BC3A710190,
 				F7D07AC009AAC71D2A4FCF54,
 				90901DB02732E3E58950978B,

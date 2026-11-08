@@ -126,3 +126,18 @@ final class AudioHub {
         return synth.loadSoundBank(URL(fileURLWithPath: path))
     }
 }
+
+/// Una sola riproduzione alla volta: quando parte il karaoke si fermano Atomix e le anteprime, e viceversa.
+enum ExclusivePlayback {
+    static let notification = Notification.Name("FPMExclusivePlayback")
+    static func announce(_ source: String) {
+        NotificationCenter.default.post(name: notification, object: nil, userInfo: ["source": source])
+    }
+    /// Esegue `stop` quando parte un'altra sorgente diversa da `source`.
+    @discardableResult
+    static func observe(_ source: @escaping () -> String, stop: @escaping () -> Void) -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(forName: notification, object: nil, queue: .main) { n in
+            if let s = n.userInfo?["source"] as? String, s != source() { stop() }
+        }
+    }
+}

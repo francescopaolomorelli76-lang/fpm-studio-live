@@ -119,3 +119,28 @@ func formatTime(_ s: Double) -> String {
     let t = max(0, Int(s.rounded(.down)))
     return String(format: "%d:%02d", t / 60, t % 60)
 }
+
+/// Larghezza disponibile per la sezione: le viste passano da colonne affiancate a colonne una sotto l'altra.
+private struct ContentWidthKey: EnvironmentKey { static let defaultValue: CGFloat = 1200 }
+extension EnvironmentValues {
+    var contentWidth: CGFloat {
+        get { self[ContentWidthKey.self] }
+        set { self[ContentWidthKey.self] = newValue }
+    }
+}
+
+/// Due colonne affiancate se c'è spazio, altrimenti una sotto l'altra.
+struct AdaptiveColumns<Left: View, Right: View>: View {
+    var width: CGFloat
+    var threshold: CGFloat
+    var rightWidth: CGFloat
+    @ViewBuilder var left: () -> Left
+    @ViewBuilder var right: () -> Right
+    var body: some View {
+        if width >= threshold {
+            HStack(alignment: .top, spacing: 12) { left(); right().frame(width: rightWidth) }
+        } else {
+            VStack(alignment: .leading, spacing: 12) { left(); right() }
+        }
+    }
+}
