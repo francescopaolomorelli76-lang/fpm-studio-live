@@ -13,15 +13,21 @@ final class AudioFilePlayer {
 
     var player: AVAudioPlayerNode { hub.filePlayer }
 
+    init() {
+        NotificationCenter.default.addObserver(forName: AudioHub.restartedNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, self.isPlaying else { return }
+            let p = self.position
+            self.isPlaying = false
+            self.seek(to: p)
+            self.play()
+        }
+    }
+
     func load(_ url: URL) throws {
         stop()
-        let f = try AVAudioFile(forReading: AudioDecode.playableURL(url))
-        // Ricollego la catena con il formato del file (mono/stereo, 44,1/48 kHz): evita errori di formato.
-        let e = hub.engine
-        e.disconnectNodeOutput(player)
-        e.disconnectNodeOutput(hub.fileTimePitch)
-        e.connect(player, to: hub.fileTimePitch, format: f.processingFormat)
-        e.connect(hub.fileTimePitch, to: hub.karaokeMixer, fromBus: 0, toBus: 1, format: f.processingFormat)
+        // Il file viene portato al formato del motore (se serve): i collegamenti restano fissi,
+        // così karaoke e Atomix possono suonare insieme senza fermarsi a vicenda.
+        let f = try AVAudioFile(forReading: AudioDecode.engineReadyURL(AudioDecode.playableURL(url), format: hub.engineFormat))
         file = f
         duration = Double(f.length) / f.processingFormat.sampleRate
         startFrame = 0
@@ -126,6 +132,41 @@ enum AudioDecode {
         do { return try convertWithAsset(url, to: cached) }
         catch { reasons.append("conversione: \(describe(error))") }
         throw RenderError.engine("formato non riconosciuto da macOS (" + reasons.joined(separator: "; ") + ")")
+    }
+
+    /// Porta il file al formato del motore (stereo, stessa frequenza). Se è già giusto, nessuna conversione.
+    static func engineReadyURL(_ url: URL, format: AVAudioFormat) throws -> URL {
+        let src = try AVAudioFile(forReading: url)
+        let inFmt = src.processingFormat
+        if inFmt.sampleRate == format.sampleRate && inFmt.channelCount == format.channelCount { return url }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let stamp = Int((attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
+        let key = "\(url.path)|\(stamp)|\(Int(format.sampleRate))".data(using: .utf8)!.base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
+        let dest = AppPaths.renderCache.appendingPathComponent("motore-" + String(key.suffix(80)) + ".caf")
+        if FileManager.default.fileExists(atPath: dest.path), (try? AVAudioFile(forReading: dest)) != nil { return dest }
+        guard let conv = AVAudioConverter(from: inFmt, to: format) else { throw RenderError.engine("conversione di formato") }
+        try? FileManager.default.removeItem(at: dest)
+        let out = try AVAudioFile(forWriting: dest, settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: format.sampleRate,
+                                                                AVNumberOfChannelsKey: 2, AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false],
+                                  commonFormat: .pcmFormatFloat32, interleaved: false)
+        let cap: AVAudioFrameCount = 32768
+        guard let inBuf = AVAudioPCMBuffer(pcmFormat: inFmt, frameCapacity: cap) else { return url }
+        var eof = false
+        while true {
+            guard let ob = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 32768) else { break }
+            var err: NSError?
+            let st = conv.convert(to: ob, error: &err) { _, s in
+                if eof { s.pointee = .endOfStream; return nil }
+                do { try src.read(into: inBuf, frameCount: cap) } catch { eof = true; s.pointee = .endOfStream; return nil }
+                if inBuf.frameLength == 0 { eof = true; s.pointee = .endOfStream; return nil }
+                s.pointee = .haveData
+                return inBuf
+            }
+            if ob.frameLength > 0 { try out.write(from: ob) }
+            if st == .endOfStream || st == .error || ob.frameLength == 0 { break }
+        }
+        return dest
     }
 
     /// Permessi e iCloud: messaggi chiari invece di errori generici.

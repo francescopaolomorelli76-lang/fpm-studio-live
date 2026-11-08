@@ -349,6 +349,18 @@ final class MIDIFile {
 }
 
 extension MIDIFile {
+    /// Nome da mostrare per un canale: il nome della sua traccia solo se è davvero sua (formato 1, traccia con un
+    /// solo canale, diverso dal titolo del brano), altrimenti lo strumento General MIDI. Mai il titolo della canzone.
+    func channelDisplayName(_ ch: Int, extraTitles: [String?] = []) -> String {
+        let gm = ch == 9 ? "Batteria" : GMNames.italian(programs[ch] ?? 0)
+        let titles = Set(([title] + extraTitles).compactMap { $0?.lowercased().trimmingCharacters(in: .whitespaces) })
+        guard format == 1, let tr = notes.first(where: { $0.channel == ch })?.track,
+              Set(notes.filter { $0.track == tr }.map { $0.channel }).count == 1,
+              let n = trackNames[tr]?.trimmingCharacters(in: .whitespaces), !n.isEmpty, n.count <= 24,
+              !titles.contains(n.lowercased()), n.lowercased() != gm.lowercased() else { return gm }
+        return "\(n) · \(gm)"
+    }
+
     /// Messaggi SysEx M-Live (produttore 00 20 24): tipo e testo.
     private func mLiveMessages() -> [(t: Double, type: UInt8, text: String)] {
         var out: [(Double, UInt8, String)] = []

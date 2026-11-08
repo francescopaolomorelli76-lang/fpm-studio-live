@@ -1,6 +1,8 @@
 import Foundation
 import AVFoundation
 import Combine
+import CoreAudio
+import AudioToolbox
 
 /// Collega dinamicamente un nodo al motore principale (si può fare anche mentre suona).
 private func attachToMain(_ nodes: [AVAudioNode], chainTo mixer: AVAudioMixerNode) {
@@ -142,6 +144,16 @@ final class BackgroundMusic: ObservableObject {
         }
         pending = w
         DispatchQueue.main.asyncAfter(deadline: .now() + delayAfterSong, execute: w)
+    }
+
+    /// Suona subito un brano (doppio clic dalla lista o dalla colonna cartella).
+    func play(_ url: URL) {
+        if !playlist.contains(url) { playlist.append(url) }
+        if let i = playlist.firstIndex(of: url) { index = i - 1 }
+        let wasShuffle = shuffle
+        shuffle = false
+        playNext()
+        shuffle = wasShuffle
     }
 
     func playNext() {
@@ -481,19 +493,105 @@ final class MedleyCreator: ObservableObject {
     }
 }
 
-// MARK: - Registrazione voce sulla base (I03)
+// MARK: - Schede audio (CoreAudio)
+
+struct AudioDevice: Identifiable, Hashable {
+    var id: AudioDeviceID
+    var name: String
+    var inputs: Int
+    var outputs: Int
+}
+
+enum AudioDevices {
+    static func all() -> [AudioDevice] {
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size) == noErr else { return [] }
+        var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids.map { AudioDevice(id: $0, name: name($0), inputs: channels($0, input: true), outputs: channels($0, input: false)) }
+    }
+
+    static func name(_ id: AudioDeviceID) -> String {
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var cf: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &cf) == noErr, let s = cf?.takeRetainedValue() else { return "Dispositivo \(id)" }
+        return s as String
+    }
+
+    static func channels(_ id: AudioDeviceID, input: Bool) -> Int {
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreamConfiguration,
+                                              mScope: input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(id, &addr, 0, nil, &size) == noErr, size > 0 else { return 0 }
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, raw) == noErr else { return 0 }
+        let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+        return list.reduce(0) { $0 + Int($1.mNumberChannels) }
+    }
+
+    /// Imposta la scheda usata da un motore (va fatto a motore fermo).
+    @discardableResult
+    static func use(_ id: AudioDeviceID, on unit: AudioUnit?) -> Bool {
+        guard let unit = unit else { return false }
+        var dev = id
+        return AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &dev, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr
+    }
+}
+
+// MARK: - Registrazione voce e base (I03), anche con scheda audio esterna
 
 final class VoiceRecorder: ObservableObject {
+    enum Mode: String, CaseIterable, Identifiable {
+        case voice, voiceAndBase
+        var id: String { rawValue }
+        var label: String { self == .voice ? "Solo voce" : "Voce + base (file mixato e tracce separate)" }
+    }
+
     @Published private(set) var recording = false
     @Published private(set) var lastFile: URL?
     @Published var status = ""
-    private let engine = AVAudioEngine()
-    private var file: AVAudioFile?
+    @Published var mode: Mode = .voiceAndBase
+    @Published private(set) var devices: [AudioDevice] = []
+    @Published var inputDevice: AudioDeviceID = 0          // 0 = predefinito di sistema
+    @Published var monitorDevice: AudioDeviceID = 0
+    @Published var mainOutputDevice: AudioDeviceID = 0
+    @Published var monitor = true { didSet { monitorMixer.outputVolume = monitor ? Float(monitorVolume) : 0 } }
+    @Published var monitorVolume: Double = 0.9 { didSet { monitorMixer.outputVolume = monitor ? Float(monitorVolume) : 0 } }
+    @Published var voiceGain: Double = 1.0
+    @Published var level: Double = 0
+
+    private var engine = AVAudioEngine()
+    private let monitorMixer = AVAudioMixerNode()
+    private var voiceFile: AVAudioFile?
+    private var baseFile: AVAudioFile?
+    private var voiceURL: URL?
+    private var baseURL: URL?
+    private var stem = ""
 
     var folder: URL {
         let u = AppPaths.exports.appendingPathComponent("Registrazioni", isDirectory: true)
         try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
         return u
+    }
+
+    init() { refreshDevices() }
+
+    func refreshDevices() { devices = AudioDevices.all() }
+    var inputs: [AudioDevice] { devices.filter { $0.inputs > 0 } }
+    var outputs: [AudioDevice] { devices.filter { $0.outputs > 0 } }
+
+    /// Uscita della base (karaoke, Atomix…): per esempio la scheda audio esterna verso il mixer live o le cuffie.
+    func applyMainOutput() {
+        guard mainOutputDevice != 0 else { return }
+        let hub = AudioHub.shared
+        hub.engine.stop()
+        AudioDevices.use(mainOutputDevice, on: hub.engine.outputNode.audioUnit)
+        hub.start()
+        NotificationCenter.default.post(name: AudioHub.restartedNotification, object: nil)
+        status = "Uscita della base: \(AudioDevices.name(mainOutputDevice))"
     }
 
     func toggle(songTitle: String?) { recording ? stop() : start(songTitle: songTitle) }
@@ -505,32 +603,101 @@ final class VoiceRecorder: ObservableObject {
         AVCaptureDevice.requestAccess(for: .audio) { ok in
             DispatchQueue.main.async {
                 guard ok else { self.status = "Accesso al microfono negato."; return }
-                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH.mm.ss"
-                let name = (songTitle ?? "Voce") + " - voce " + f.string(from: Date()) + ".wav"
-                let url = self.folder.appendingPathComponent(name.replacingOccurrences(of: "/", with: "-"))
-                let input = self.engine.inputNode
-                let fmt = input.inputFormat(forBus: 0)
-                do {
-                    self.file = try AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: fmt.sampleRate,
-                                                                          AVNumberOfChannelsKey: fmt.channelCount, AVLinearPCMBitDepthKey: 24,
-                                                                          AVLinearPCMIsFloatKey: false])
-                    input.installTap(onBus: 0, bufferSize: 4096, format: fmt) { [weak self] buf, _ in try? self?.file?.write(from: buf) }
-                    try self.engine.start()
-                    self.recording = true
-                    self.lastFile = url
-                    self.status = "Registro: \(url.lastPathComponent)"
-                } catch {
-                    self.status = "Registrazione non avviata: \(error.localizedDescription)"
-                }
+                self.begin(songTitle: songTitle)
             }
         }
     }
 
-    private func stop() {
+    private func begin(songTitle: String?) {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        stem = ((songTitle ?? "Registrazione") + " - " + f.string(from: Date())).replacingOccurrences(of: "/", with: "-")
+        engine = AVAudioEngine()
+        if inputDevice != 0 { AudioDevices.use(inputDevice, on: engine.inputNode.audioUnit) }
+        if monitorDevice != 0 { AudioDevices.use(monitorDevice, on: engine.outputNode.audioUnit) }
+        let input = engine.inputNode
+        let fmt = input.inputFormat(forBus: 0)
+        guard fmt.channelCount > 0, fmt.sampleRate > 0 else { status = "La scheda scelta non ha ingressi attivi."; return }
+        // Ascolto in cuffia della voce (latenza minima, senza effetti).
+        engine.attach(monitorMixer)
+        engine.connect(input, to: monitorMixer, format: fmt)
+        engine.connect(monitorMixer, to: engine.mainMixerNode, format: fmt)
+        monitorMixer.outputVolume = monitor ? Float(monitorVolume) : 0
+        do {
+            let vURL = folder.appendingPathComponent(stem + " - voce.wav")
+            voiceFile = try AVAudioFile(forWriting: vURL, settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: fmt.sampleRate,
+                                                                    AVNumberOfChannelsKey: fmt.channelCount, AVLinearPCMBitDepthKey: 24, AVLinearPCMIsFloatKey: false])
+            voiceURL = vURL
+            input.installTap(onBus: 0, bufferSize: 4096, format: fmt) { [weak self] buf, _ in
+                try? self?.voiceFile?.write(from: buf)
+                if let d = buf.floatChannelData?[0] {
+                    var pk: Float = 0
+                    for i in 0..<Int(buf.frameLength) { pk = max(pk, abs(d[i])) }
+                    DispatchQueue.main.async { self?.level = Double(pk) }
+                }
+            }
+            if mode == .voiceAndBase {
+                let hub = AudioHub.shared
+                hub.start()
+                let bfmt = hub.engine.mainMixerNode.outputFormat(forBus: 0)
+                let bURL = folder.appendingPathComponent(stem + " - base.wav")
+                baseFile = try AVAudioFile(forWriting: bURL, settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: bfmt.sampleRate,
+                                                                       AVNumberOfChannelsKey: bfmt.channelCount, AVLinearPCMBitDepthKey: 24, AVLinearPCMIsFloatKey: false])
+                baseURL = bURL
+                hub.engine.mainMixerNode.installTap(onBus: 0, bufferSize: 4096, format: bfmt) { [weak self] buf, _ in try? self?.baseFile?.write(from: buf) }
+            }
+            try engine.start()
+            recording = true
+            lastFile = vURL
+            status = "Registro" + (mode == .voiceAndBase ? " voce e base" : " la voce") + (monitor ? " · ascolto in cuffia attivo" : "")
+        } catch {
+            status = "Registrazione non avviata: \(error.localizedDescription)"
+            cleanup()
+        }
+    }
+
+    private func cleanup() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        file = nil
+        if baseFile != nil { AudioHub.shared.engine.mainMixerNode.removeTap(onBus: 0) }
+        voiceFile = nil; baseFile = nil
         recording = false
-        if let f = lastFile { status = "Salvata: \(f.lastPathComponent)" }
+        level = 0
+    }
+
+    private func stop() {
+        let hadBase = baseFile != nil
+        cleanup()
+        guard let v = voiceURL else { return }
+        guard hadBase, let b = baseURL else { status = "Salvata: \(v.lastPathComponent)"; return }
+        status = "Unisco voce e base…"
+        let mixURL = folder.appendingPathComponent(stem + " - mix.wav")
+        let gain = Float(voiceGain)
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let bd = AVAudioFile.duration(b), vd = AVAudioFile.duration(v)
+                let (bl, br) = try MedleyCreator.decodeStereo(b, sr: 44100, from: 0, to: bd)
+                let (vl, vr) = try MedleyCreator.decodeStereo(v, sr: 44100, from: 0, to: vd)
+                let n = max(bl.count, vl.count)
+                var L = [Float](repeating: 0, count: n), R = [Float](repeating: 0, count: n)
+                for i in 0..<bl.count { L[i] += bl[i]; R[i] += br[i] }
+                // La voce (spesso mono sul canale 1 della scheda) va al centro.
+                for i in 0..<vl.count { let m = (vl[i] + vr[i]) * 0.5 * gain; L[i] += m; R[i] += m }
+                Mastering.limit(&L, &R, sr: 44100, from: 0, to: n, ceiling: 0.95)
+                try AudioExporter.write(RenderedAudio(left: L, right: R, sampleRate: 44100), to: mixURL, format: .wav)
+                DispatchQueue.main.async {
+                    self.lastFile = mixURL
+                    self.status = "Salvati: mix, voce e base separati (\(mixURL.deletingPathExtension().lastPathComponent))"
+                }
+            } catch {
+                DispatchQueue.main.async { self.status = "Voce e base salvate separate; mix non riuscito: \(error.localizedDescription)" }
+            }
+        }
+    }
+}
+
+extension AVAudioFile {
+    static func duration(_ u: URL) -> Double {
+        guard let f = try? AVAudioFile(forReading: u) else { return 0 }
+        return Double(f.length) / f.processingFormat.sampleRate
     }
 }

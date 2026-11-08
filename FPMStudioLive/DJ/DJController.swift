@@ -8,7 +8,8 @@ final class DJController: ObservableObject {
     let deckB: Deck
     @Published var crossfader: Double = 0 { didSet { applyCrossfader() } }   // -1 = A, +1 = B
     @Published var playlist: [URL] = [] { didSet { savePlaylist() } }
-    @Published var automix = false { didSet { if automix { startAutomix() } } }
+    @Published var automix = false { didSet { if automix && !automixSilently { startAutomix() } } }
+    private var automixSilently = false
     @Published var crossfadeSeconds: Double = 8
     @Published var syncTempo = true
     @Published private(set) var status = ""
@@ -86,6 +87,24 @@ final class DJController: ObservableObject {
         } else {
             status = "Automix attivo"
         }
+    }
+
+    /// Pulsante unico ATOMIX: se non suona niente parte il primo brano; se un brano suona, sfuma e passa al successivo.
+    /// Da quel momento il mix continua da solo a ogni fine brano finché ci sono brani in coda.
+    func atomix() {
+        if activeDeck == nil {
+            if let ready = [deckA, deckB].first(where: { $0.url != nil && !$0.loading }) {
+                crossfader = ready === deckA ? -1 : 1
+                ready.play()
+                if !automix { automixSilently = true; automix = true; automixSilently = false }
+                status = "ATOMIX: in onda \(ready.title)"
+            } else {
+                automix = true   // carica e fa partire il primo della playlist
+            }
+            return
+        }
+        if !automix { automixSilently = true; automix = true; automixSilently = false }
+        mixNow()
     }
 
     /// Pulsante MIX: dal brano che suona a quello in attesa sull'altro deck.

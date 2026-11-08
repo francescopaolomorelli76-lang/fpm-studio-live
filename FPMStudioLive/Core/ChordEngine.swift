@@ -215,6 +215,29 @@ enum ChordEngine {
         return span > 0 ? Double(overlap) / Double(span) : 0
     }
 
+    /// Regioni dagli accordi scritti nel file dal produttore (M-Live): esatte, dall'inizio alla fine.
+    static func regions(fromEmbedded chords: [ChordEvent], midi: MIDIFile) -> [ChordRegion] {
+        var out: [ChordRegion] = []
+        let musicEnd = midi.notes.map { $0.endTick }.max() ?? midi.endTick
+        // I produttori scrivono l'accordo un attimo prima del tempo (30–50 tick): lo riporto sul quarto più vicino,
+        // altrimenti il pianoforte colpirebbe due volte a pochi millisecondi (effetto eco).
+        let beat = midi.ticksPerBeat
+        func snap(_ t: Int) -> Int {
+            let r = t % beat
+            let near = r > beat / 2 ? t - r + beat : t - r
+            if abs(near - t) <= beat / 3 { return near }
+            let e = max(1, beat / 2)
+            let r2 = t % e
+            return r2 > e / 2 ? t - r2 + e : t - r2
+        }
+        for (i, c) in chords.enumerated() {
+            let a = snap(midi.tick(atSeconds: c.time))
+            let b = i + 1 < chords.count ? snap(midi.tick(atSeconds: chords[i + 1].time)) : musicEnd
+            if b > a { out.append(ChordRegion(startTick: a, endTick: b, chord: c.chord)) }
+        }
+        return out
+    }
+
     static func events(_ regions: [ChordRegion], midi: MIDIFile) -> [ChordEvent] {
         var out: [ChordEvent] = []
         for r in regions {

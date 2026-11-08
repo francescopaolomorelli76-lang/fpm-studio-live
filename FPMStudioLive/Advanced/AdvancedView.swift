@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import CoreAudio
 
 /// Stato reale di ogni requisito del capitolato (nessun pulsante finto: ciò che manca è dichiarato).
 struct FeatureStatus: Identifiable {
@@ -386,28 +387,100 @@ struct MedleyPanel: View {
 
 struct BackgroundPanel: View {
     @ObservedObject var bg: BackgroundMusic
+    @StateObject private var preview = PreviewPlayer()
+    @State private var folder: URL? = UserDefaults.standard.string(forKey: "bgFolder").map { URL(fileURLWithPath: $0) }
+    @State private var files: [URL] = []
+    @State private var selectedFile: URL?
+    @State private var dropTarget = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Musica di sottofondo automatica quando il palco è fermo", isOn: $bg.enabled).toggleStyle(.switch)
             HStack {
-                Text("Volume"); Slider(value: $bg.volume, in: 0...1).frame(width: 160)
-                Text("Parte dopo \(Int(bg.delayAfterSong)) s"); Slider(value: $bg.delayAfterSong, in: 1...30, step: 1).frame(width: 140)
+                Text("Volume"); Slider(value: $bg.volume, in: 0...1).frame(width: 140)
+                Text("Parte dopo \(Int(bg.delayAfterSong)) s"); Slider(value: $bg.delayAfterSong, in: 1...30, step: 1).frame(width: 120)
                 Toggle("Casuale", isOn: $bg.shuffle)
-            }
-            HStack {
-                Text(bg.isPlaying ? "♪ \(bg.current)" : "In attesa").foregroundColor(Theme.cyan)
                 Spacer()
-                Button("Aggiungi brani…") {
-                    let p = NSOpenPanel(); p.allowedContentTypes = [.audio]; p.allowsMultipleSelection = true
-                    if p.runModal() == .OK { bg.playlist += p.urls }
-                }.buttonStyle(NeonButtonStyle(prominent: false))
+                Text(bg.isPlaying ? "♪ \(bg.current)" : "In attesa").foregroundColor(Theme.cyan).lineLimit(1)
                 Button("Successivo") { bg.playNext() }.buttonStyle(NeonButtonStyle(prominent: false)).disabled(bg.playlist.isEmpty)
-                Button("Svuota") { bg.playlist.removeAll() }.buttonStyle(NeonButtonStyle(prominent: false))
+                Button("Stop") { bg.fadeAndStop() }.buttonStyle(NeonButtonStyle(prominent: false))
             }
-            List { ForEach(bg.playlist, id: \.self) { Text($0.deletingPathExtension().lastPathComponent) }.onDelete { bg.playlist.remove(atOffsets: $0) } }
-                .frame(minHeight: 160)
-            Text("Sfuma da sola quando parte un brano del karaoke e riparte quando si ferma.").font(.caption).foregroundColor(Theme.soft)
+            HStack(alignment: .top, spacing: 12) {
+                // Colonna cartella: i brani di una cartella, da ascoltare e trascinare nella playlist.
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(folder?.lastPathComponent ?? "Nessuna cartella").font(.system(size: 12, weight: .bold)).lineLimit(1)
+                        Spacer()
+                        Button("Cartella…") { chooseFolder() }.buttonStyle(NeonButtonStyle(prominent: false))
+                    }
+                    List(files, id: \.self, selection: $selectedFile) { u in
+                        Text(u.deletingPathExtension().lastPathComponent).font(.system(size: 12)).lineLimit(1)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { bg.play(u) }
+                            .onTapGesture { selectedFile = u; preview.load(u) }
+                            .onDrag { NSItemProvider(object: u as NSURL) }
+                            .contextMenu {
+                                Button("Ascolta qui") { preview.load(u, autoplay: true) }
+                                Button("Suona come sottofondo") { bg.play(u) }
+                                Button("Aggiungi alla playlist") { bg.playlist.append(u) }
+                            }
+                    }
+                    .frame(minHeight: 200)
+                    Text("Clic: ascolti nel lettore qui sotto · doppio clic: suona · trascina nella playlist").font(.caption2).foregroundColor(Theme.soft)
+                    MiniPlayerView(player: preview)
+                }.frame(maxWidth: .infinity)
+                // Playlist del sottofondo.
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("PLAYLIST SOTTOFONDO (\(bg.playlist.count))").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.soft)
+                        Spacer()
+                        Button("Aggiungi…") {
+                            let p = NSOpenPanel(); p.allowedContentTypes = [.audio]; p.allowsMultipleSelection = true
+                            if p.runModal() == .OK { bg.playlist += p.urls }
+                        }.buttonStyle(NeonButtonStyle(prominent: false))
+                        Button("Svuota") { bg.playlist.removeAll() }.buttonStyle(NeonButtonStyle(prominent: false))
+                    }
+                    List {
+                        ForEach(bg.playlist, id: \.self) { u in
+                            HStack {
+                                Image(systemName: bg.current == u.deletingPathExtension().lastPathComponent && bg.isPlaying ? "speaker.wave.2.fill" : "music.note")
+                                    .foregroundColor(Theme.cyan)
+                                Text(u.deletingPathExtension().lastPathComponent).font(.system(size: 12)).lineLimit(1)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { bg.play(u) }
+                            .onTapGesture { preview.load(u) }
+                        }
+                        .onDelete { bg.playlist.remove(atOffsets: $0) }
+                        .onMove { bg.playlist.move(fromOffsets: $0, toOffset: $1) }
+                        .onInsert(of: [.fileURL]) { i, providers in
+                            DropHelper.urls(from: providers) { urls in bg.playlist.insert(contentsOf: urls.filter { SongKind.of($0) == .audio }, at: min(i, bg.playlist.count)) }
+                        }
+                    }
+                    .frame(minHeight: 240)
+                    .onDrop(of: [.fileURL], isTargeted: $dropTarget) { providers in
+                        DropHelper.urls(from: providers) { urls in bg.playlist += urls.filter { SongKind.of($0) == .audio } }
+                        return true
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.magenta, lineWidth: dropTarget ? 2 : 0))
+                    Text("Sfuma da sola quando parte un brano del karaoke e riparte quando si ferma. Trascina qui dalla colonna, dall'archivio o dal Finder.")
+                        .font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true)
+                }.frame(maxWidth: .infinity)
+            }
         }
+        .onAppear { loadFolder() }
+    }
+
+    private func chooseFolder() {
+        let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false
+        if p.runModal() == .OK, let u = p.url { folder = u; UserDefaults.standard.set(u.path, forKey: "bgFolder"); loadFolder() }
+    }
+
+    private func loadFolder() {
+        guard let f = folder else { return }
+        files = ((try? FileManager.default.contentsOfDirectory(at: f, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? [])
+            .filter { SongKind.of($0) == .audio && $0.pathExtension.lowercased() != "cdg" }
+            .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
     }
 }
 
@@ -447,15 +520,51 @@ struct RecordPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Button(action: { recorder.toggle(songTitle: player.item?.title) }) {
-                    Label(recorder.recording ? "Ferma registrazione" : "Registra la voce", systemImage: recorder.recording ? "stop.circle.fill" : "record.circle")
+                    Label(recorder.recording ? "Ferma registrazione" : "Registra", systemImage: recorder.recording ? "stop.circle.fill" : "record.circle")
                 }.buttonStyle(NeonButtonStyle(prominent: !recorder.recording))
-                if recorder.recording { Circle().fill(Color.red).frame(width: 12, height: 12) }
+                if recorder.recording {
+                    Circle().fill(Color.red).frame(width: 12, height: 12)
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Theme.bg2)
+                            Capsule().fill(Theme.gradient).frame(width: g.size.width * CGFloat(min(1, recorder.level * 1.4)))
+                        }
+                    }.frame(width: 120, height: 6)
+                }
                 Spacer()
                 Button("Apri cartella registrazioni") { NSWorkspace.shared.open(recorder.folder) }.buttonStyle(NeonButtonStyle(prominent: false))
             }
-            Text(recorder.status).font(.caption).foregroundColor(Theme.cyan)
-            Text("Registra il microfono in un file WAV 24 bit separato mentre suona la base (usa le cuffie per non registrare anche la musica). Il mix voce + base in un unico file arriverà in una versione successiva.")
-                .font(.caption).foregroundColor(Theme.soft)
+            Picker("Cosa registrare", selection: $recorder.mode) { ForEach(VoiceRecorder.Mode.allCases) { Text($0.label).tag($0) } }
+                .pickerStyle(.radioGroup).disabled(recorder.recording)
+            Panel(title: "Scheda audio", icon: "hifispeaker.2") {
+                HStack {
+                    Picker("Ingresso voce", selection: $recorder.inputDevice) {
+                        Text("Predefinito di sistema").tag(AudioDeviceID(0))
+                        ForEach(recorder.inputs) { d in Text("\(d.name) (\(d.inputs) ingressi)").tag(d.id) }
+                    }
+                    Button(action: { recorder.refreshDevices() }) { Image(systemName: "arrow.clockwise") }.help("Aggiorna l'elenco (dopo aver collegato la scheda)")
+                }
+                Picker("Ascolto voce in cuffia su", selection: $recorder.monitorDevice) {
+                    Text("Predefinito di sistema").tag(AudioDeviceID(0))
+                    ForEach(recorder.outputs) { d in Text("\(d.name) (\(d.outputs) uscite)").tag(d.id) }
+                }
+                HStack {
+                    Toggle("Ascolta la voce in cuffia", isOn: $recorder.monitor).toggleStyle(.switch)
+                    Slider(value: $recorder.monitorVolume, in: 0...1.5).frame(width: 120)
+                }
+                HStack {
+                    Picker("Uscita della base (live/cuffie)", selection: $recorder.mainOutputDevice) {
+                        Text("Predefinito di sistema").tag(AudioDeviceID(0))
+                        ForEach(recorder.outputs) { d in Text("\(d.name) (\(d.outputs) uscite)").tag(d.id) }
+                    }
+                    Button("Applica") { recorder.applyMainOutput() }.buttonStyle(NeonButtonStyle(prominent: false)).disabled(recorder.mainOutputDevice == 0)
+                }
+                HStack { Text("Volume voce nel mix"); Slider(value: $recorder.voiceGain, in: 0.3...2) }
+            }
+            .disabled(recorder.recording)
+            Text(recorder.status).font(.caption).foregroundColor(Theme.cyan).fixedSize(horizontal: false, vertical: true)
+            Text("Con una scheda audio esterna: scegli la scheda come ingresso voce e come uscite. La base e la voce vanno in cuffia o all'impianto; alla fine trovi il file mixato e le tracce separate di voce e base (WAV 24 bit).")
+                .font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

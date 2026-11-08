@@ -105,3 +105,27 @@ extension MIDIFile {
         return out
     }
 }
+
+extension MIDIFile {
+    /// "Scheletro" MIDI senza note per un brano audio: tempo costante dal BPM analizzato e una battuta
+    /// di attacco che fa coincidere la griglia con il primo "uno" di battuta dell'audio.
+    static func skeleton(bpm: Double, firstDownbeat: Double, duration: Double, beatsPerBar: Int = 4) -> MIDIFile {
+        let ppq = 480
+        var w = MIDIWriter(ppq: ppq)
+        var ev: [MIDIWriter.TrackEvent] = []
+        let bar = ppq * beatsPerBar
+        var offsetTicks = 0
+        if firstDownbeat > 0.3 {
+            // La prima battuta dura esattamente quanto l'attesa prima dell'"uno".
+            ev.append(.init(tick: 0, bytes: MIDIWriter.tempo(bpm: Double(beatsPerBar) * 60 / firstDownbeat)))
+            offsetTicks = bar
+        }
+        ev.append(.init(tick: offsetTicks, bytes: MIDIWriter.tempo(bpm: bpm)))
+        ev.append(.init(tick: 0, bytes: MIDIWriter.meta(0x58, [UInt8(beatsPerBar), 2, 24, 8])))
+        let remaining = max(0, duration - (offsetTicks > 0 ? firstDownbeat : 0))
+        let endTick = offsetTicks + Int(remaining / 60 * bpm * Double(ppq))
+        ev.append(.init(tick: endTick, bytes: MIDIWriter.text(0x01, "fine")))
+        w.addTrack("Tempo", ev)
+        return try! MIDIFile(data: w.data())
+    }
+}

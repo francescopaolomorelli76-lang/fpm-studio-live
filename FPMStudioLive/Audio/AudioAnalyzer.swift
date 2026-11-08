@@ -16,6 +16,7 @@ enum AudioAnalyzer {
         var lastSound: Double        // ultimo suono
         var duration: Double
         var waveform: [Float]        // 800 picchi per la forma d'onda
+        var barEnergy: [Double] = [] // energia media per battuta (stesso ordine di `bars`)
 
         var bars: [Double] {
             guard beats.count > 4 else { return [] }
@@ -61,7 +62,7 @@ enum AudioAnalyzer {
     }
 
     static func analyze(url: URL, progress: @escaping (Double) -> Void = { _ in }) throws -> Result {
-        let x = try decodeMono(url)
+        let x = try decodeMono((try? AudioDecode.playableURL(url)) ?? url)
         return analyze(samples: x, progress: progress)
     }
 
@@ -261,9 +262,20 @@ enum AudioAnalyzer {
             }
         }
         progress(1)
-        return Result(bpm: 60 * fps / Double(P), beats: beats, downbeatOffset: down, chords: chords,
-                      keyRoot: key.root, keyMinor: key.minor, leadIn: Double(first) / sr, lastSound: Double(last) / sr,
-                      duration: duration, waveform: wave)
+        var result = Result(bpm: 60 * fps / Double(P), beats: beats, downbeatOffset: down, chords: chords,
+                            keyRoot: key.root, keyMinor: key.minor, leadIn: Double(first) / sr, lastSound: Double(last) / sr,
+                            duration: duration, waveform: wave)
+        // Energia per battuta (RMS dei fotogrammi), per distinguere strofe e ritornelli.
+        let bars = result.bars
+        var be: [Double] = []
+        for (i, b) in bars.enumerated() {
+            let f0 = Int(b * fps), f1 = Int((i + 1 < bars.count ? bars[i + 1] : duration) * fps)
+            let a = max(0, min(nF, f0)), z = max(a, min(nF, f1))
+            be.append(z > a ? Double(energy[a..<z].reduce(0, +)) / Double(z - a) : 0)
+        }
+        let mx = be.max() ?? 1
+        result.barEnergy = be.map { mx > 0 ? $0 / mx : 0 }
+        return result
     }
 
     /// Solo forma d'onda, inizio/fine e BPM (più veloce, per i deck DJ).

@@ -2,8 +2,27 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// Clic sull'icona nel Dock: la finestra ridotta (pallino giallo) torna sullo schermo.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        var shown = false
+        for w in sender.windows where w.canBecomeMain {
+            if w.isMiniaturized { w.deminiaturize(nil) }
+            w.makeKeyAndOrderFront(nil)
+            shown = true
+        }
+        sender.activate(ignoringOtherApps: true)
+        return !shown
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
 @main
 struct FPMStudioLiveApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var player = KaraokePlayer()
     @StateObject private var library = Library()
     @StateObject private var dj = DJController()

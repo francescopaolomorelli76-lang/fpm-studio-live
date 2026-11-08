@@ -10,7 +10,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .karaoke: return "Karaoke"
-        case .dj: return "DJ Automix"
+        case .dj: return "Atomix"
         case .piano: return "Piano Studio"
         case .ai: return "AI Studio"
         case .advanced: return "Funzioni avanzate"
@@ -47,29 +47,35 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            HStack(spacing: 12) {
-                if showLibrary {
-                    LibraryView(library: library, player: player, dj: dj, piano: piano, ai: ai, section: $section)
-                        .frame(width: 290)
-                }
-                Group {
-                    switch section {
-                    case .karaoke: KaraokeView(player: player, library: library, mic: mic)
-                    case .dj: DJView(dj: dj, library: library)
-                    case .piano: PianoStudioView(model: piano)
-                    case .ai: AIStudioView(model: ai, player: player, library: library) { section = .karaoke }
-                    case .advanced: AdvancedView(player: player, sampler: sampler, multitrack: multitrack, medley: medley,
-                                                 background: background, web: web, recorder: recorder, shortcuts: shortcuts)
+            // La barra in alto resta sempre visibile: se la finestra è piccola, il contenuto scorre sotto.
+            GeometryReader { geo in
+                ScrollView([.vertical, .horizontal]) {
+                    HStack(spacing: 12) {
+                        if showLibrary {
+                            LibraryView(library: library, player: player, dj: dj, piano: piano, ai: ai, section: $section)
+                                .frame(width: 270)
+                        }
+                        Group {
+                            switch section {
+                            case .karaoke: KaraokeView(player: player, library: library, mic: mic)
+                            case .dj: DJView(dj: dj, library: library)
+                            case .piano: PianoStudioView(model: piano)
+                            case .ai: AIStudioView(model: ai, player: player, library: library) { section = .karaoke }
+                            case .advanced: AdvancedView(player: player, sampler: sampler, multitrack: multitrack, medley: medley,
+                                                         background: background, web: web, recorder: recorder, shortcuts: shortcuts)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .padding(12)
+                    .frame(width: max(geo.size.width, 900), height: max(geo.size.height, 560))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(12)
         }
         .background(Theme.background.ignoresSafeArea())
         .foregroundColor(Theme.ink)
         .preferredColorScheme(.dark)
-        .frame(minWidth: 960, minHeight: 600)
+        .frame(minWidth: 720, minHeight: 480)
         .onAppear {
             player.library = library
             shortcuts.player = player
@@ -150,7 +156,7 @@ struct LibraryView: View {
                     Button("Carica nel deck A") { dj.load(it.url, into: dj.deckA); section = .dj }
                     Button("Carica nel deck B") { dj.load(it.url, into: dj.deckB); section = .dj }
                     Button("Aggiungi alla playlist automix") { dj.playlist.append(it.url) }
-                    if it.kind == .midi {
+                    if it.kind != .video {
                         Divider()
                         Button("Apri nel Piano Studio") { piano.open(it.url); section = .piano }
                     }

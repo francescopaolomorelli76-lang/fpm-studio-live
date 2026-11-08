@@ -223,8 +223,15 @@ struct SongSection: Codable, Hashable, Identifiable {
     var start: Double   // secondi
     var end: Double
     var number: Int = 1 // VERSE 1, VERSE 2...
+    /// Nome scritto dal produttore nel file (es. "Verse 1", "Special"): se c'è, si mostra quello.
+    var label: String? = nil
 
     var title: String {
+        if let l = label, !l.isEmpty { return l.uppercased() }
+        return autoTitle
+    }
+
+    private var autoTitle: String {
         [.verse, .chorus, .preChorus, .instrumental].contains(kind) ? "\(kind.label) \(number)" : kind.label
     }
 }

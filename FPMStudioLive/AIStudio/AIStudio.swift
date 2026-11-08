@@ -43,6 +43,61 @@ final class AIStudioModel: ObservableObject {
     @Published private(set) var resultURL: URL?
     @Published var status = ""
     @Published private(set) var history: [URL] = []
+    /// Lettore dedicato dell'AI Studio (non usa il karaoke).
+    let preview = PreviewPlayer()
+    @Published var prepareForSuno = UserDefaults.standard.bool(forKey: "prepareForSuno") { didSet { UserDefaults.standard.set(prepareForSuno, forKey: "prepareForSuno") } }
+
+    /// Ascolta un brano creato (MIDI → audio con i suoni scelti) nel lettore dell'AI Studio.
+    func listen(_ u: URL) {
+        guard let m = try? MIDIFile(url: u) else { preview.load(u, autoplay: true); return }
+        var s = OfflineRenderer.Settings()
+        s.soundBank = AppSettings.shared.soundFontURL
+        s.sampleRate = 44100
+        preview.loadMIDI(m, key: "ai|\(u.path)|\((try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)?.timeIntervalSince1970 ?? 0)|\(s.soundBank?.path ?? "")",
+                         title: u.deletingPathExtension().lastPathComponent, settings: s, autoplay: true)
+    }
+
+    // MARK: Suno
+    /// Suno non offre un collegamento ufficiale per altre app: preparo stile e testo pronti da incollare in suno.com.
+    var sunoStyle: String {
+        var parts = resolvedStyles.map { $0.label }
+        if !req.styleText.isEmpty { parts.append(req.styleText) }
+        if let r = result { parts.append("\(Int(r.bpm.rounded())) BPM"); parts.append(KeyDetector.name(root: r.keyRoot, minor: r.minor, notation: .english)) }
+        else if !autoBPM { parts.append("\(Int(manualBPM)) BPM") }
+        if req.vocal == .instrumental { parts.append("instrumental") }
+        var s = parts.joined(separator: ", ")
+        if !req.negativeText.isEmpty { s += " — senza: " + req.negativeText }
+        return String(s.prefix(1000))
+    }
+
+    var sunoLyrics: String {
+        let paragraphs = SongGenerator.paragraphs(req.lyrics)
+        guard !paragraphs.isEmpty else { return req.vocal == .instrumental ? "[Instrumental]" : "" }
+        var seen: [String: Int] = [:]
+        for p in paragraphs { seen[p.text.joined(separator: "\n").lowercased(), default: 0] += 1 }
+        var out: [String] = ["[Intro]"]
+        for p in paragraphs {
+            let k = p.text.joined(separator: "\n").lowercased()
+            let tag: String
+            switch p.label ?? ((seen[k] ?? 0) > 1 ? .chorus : .verse) {
+            case .chorus: tag = "[Chorus]"
+            case .bridge: tag = "[Bridge]"
+            case .preChorus: tag = "[Pre-Chorus]"
+            case .intro: tag = "[Intro]"
+            case .outro: tag = "[Outro]"
+            default: tag = "[Verse]"
+            }
+            out.append(tag); out += p.text; out.append("")
+        }
+        out.append("[Outro]")
+        return out.joined(separator: "\n")
+    }
+
+    func copyToPasteboard(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+        status = "Copiato: incollalo in Suno"
+    }
 
     static let styleTags: [String] = ["Pop", "Rock", "R&B", "Hip-Hop", "Dance", "EDM", "House", "Techno", "Trap", "Lo-fi", "Chillout", "Synthwave",
                                       "Jazz", "Classical", "Piano Ballad", "Acoustic", "Country", "Folk", "Metal", "Soul", "Gospel", "Latin",
@@ -135,7 +190,7 @@ final class AIStudioModel: ObservableObject {
         let bars = r.bars
         let side = SongSidecar.load(for: url)
         let input = SongStructureAnalyzer.Input(bars: bars, duration: r.duration, musicStart: r.leadIn, lyrics: side?.lyrics,
-                                                chords: r.chords, vocalTimes: [], density: bars.map { _ in 1 })
+                                                chords: r.chords, vocalTimes: [], density: r.barEnergy)
         let sections = SongStructureAnalyzer.analyze(input)
         let barChords: [Chord?] = bars.map { t in r.chords.last(where: { $0.time <= t + 0.15 })?.chord }
         return ReferenceTrack(bpm: r.bpm, beatsPerBar: 4, keyRoot: r.keyRoot, minor: r.keyMinor, duration: r.duration,
@@ -255,12 +310,17 @@ struct AIStudioView: View {
                 .frame(maxWidth: .infinity).padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Theme.gradient).opacity(0.35))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.violet))
+                MiniPlayerView(player: model.preview)
                 Panel(title: "I miei brani", icon: "music.note.list") {
                     if model.history.isEmpty { Text("Ancora nessuno").font(.caption).foregroundColor(Theme.soft) }
                     ForEach(model.history.prefix(8), id: \.self) { u in
-                        Button(action: { player.load(LibraryItem(url: u), autoplay: true); openKaraoke() }) {
-                            HStack { Image(systemName: "play.circle"); Text(u.deletingPathExtension().lastPathComponent).lineLimit(1); Spacer() }
-                        }.buttonStyle(.plain).font(.caption)
+                        HStack {
+                            Button(action: { model.listen(u) }) {
+                                HStack { Image(systemName: "play.circle"); Text(u.deletingPathExtension().lastPathComponent).lineLimit(1); Spacer() }
+                            }.buttonStyle(.plain).font(.caption)
+                            Button(action: { player.load(LibraryItem(url: u), autoplay: true); openKaraoke() }) { Image(systemName: "music.mic") }
+                                .buttonStyle(.plain).help("Apri nel karaoke")
+                        }
                     }
                 }
             }.frame(width: 250)
@@ -319,8 +379,12 @@ struct AIStudioView: View {
     private var sourceStep: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                bigChoice("music.note", "Ho una traccia", "MIDI o MP3: tengo accordi, tempo, struttura e testo e la riarrangio nello stile scelto.",
+                bigChoice("music.note", "Ho una traccia", "MIDI o MP3: trascinalo qui. Tengo accordi, tempo, struttura e testo e lo riarrangio nello stile scelto.",
                           model.req.source == .reference) { model.req.source = .reference }
+                    .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                        DropHelper.urls(from: providers) { urls in if let u = urls.first(where: { SongKind.of($0) != nil }) { model.setReference(u) } }
+                        return true
+                    }
                 bigChoice("sparkles", "Da zero", "Compongo un brano nuovo dal tuo testo e dallo stile.", model.req.source == .scratch) { model.req.source = .scratch }
             }
             if model.req.source == .reference {
@@ -388,6 +452,16 @@ struct AIStudioView: View {
                     Text("Gratis, nessun credito extra.").font(.caption).foregroundColor(Theme.cyan)
                 }
             }
+            Text("TONALITÀ").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.soft)
+            HStack {
+                Picker("Nota", selection: Binding(get: { model.req.keyRoot ?? -1 }, set: { model.req.keyRoot = $0 < 0 ? nil : $0 })) {
+                    Text("Automatica").tag(-1)
+                    ForEach(0..<12, id: \.self) { k in Text(Chord.noteName(k, notation: AppSettings.shared.notation, preferFlats: Chord.defaultPrefersFlat(k))).tag(k) }
+                }.frame(width: 200)
+                Picker("", selection: Binding(get: { model.req.minor.map { $0 ? 1 : 0 } ?? -1 }, set: { model.req.minor = $0 < 0 ? nil : $0 == 1 })) {
+                    Text("Automatico").tag(-1); Text("Maggiore").tag(0); Text("Minore").tag(1)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 260)
+            }
             Button(action: { withAnimation { model.showAdvanced.toggle() } }) { Label("Opzioni avanzate", systemImage: "slider.horizontal.3") }
                 .buttonStyle(NeonButtonStyle(prominent: false))
             if model.showAdvanced {
@@ -400,13 +474,6 @@ struct AIStudioView: View {
                         weight("STRANEZZA", $model.req.strangeness, "0 prevedibile · 1 armonie sperimentali.")
                         weight("PESO AUDIO", $model.req.referenceWeight, "0 accordi nuovi · 1 accordi del riferimento.")
                     }
-                    Picker("Tonalità", selection: Binding(get: { model.req.keyRoot ?? -1 }, set: { model.req.keyRoot = $0 < 0 ? nil : $0 })) {
-                        Text("Automatica").tag(-1)
-                        ForEach(0..<12, id: \.self) { k in Text(Chord.noteName(k, notation: AppSettings.shared.notation, preferFlats: Chord.defaultPrefersFlat(k))).tag(k) }
-                    }.frame(width: 220)
-                    Picker("Modo", selection: Binding(get: { model.req.minor.map { $0 ? 1 : 0 } ?? -1 }, set: { model.req.minor = $0 < 0 ? nil : $0 == 1 })) {
-                        Text("Automatico").tag(-1); Text("Maggiore").tag(0); Text("Minore").tag(1)
-                    }.frame(width: 220)
                 }
             }
         }
@@ -442,14 +509,34 @@ struct AIStudioView: View {
             if !r.negativeText.isEmpty { summaryRow("Senza", r.negativeText) }
             summaryRow("Testo", r.lyrics.isEmpty ? "nessuno" : "\(SongGenerator.paragraphs(r.lyrics).count) strofe")
             summaryRow("Suoni", AppSettings.shared.soundFontName)
+            Toggle("Prepara anche per Suno (stile e testo pronti da incollare nel tuo account)", isOn: $model.prepareForSuno).toggleStyle(.checkbox)
+            if model.prepareForSuno {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Suno non permette ad altre app di creare brani nel tuo account: preparo tutto io, tu incolli e premi Create.")
+                        .font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true)
+                    Text("STILE").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.soft)
+                    Text(model.sunoStyle).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                    Text("TESTO CON SEZIONI").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.soft)
+                    ScrollView { Text(model.sunoLyrics).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                        .frame(height: 110)
+                    HStack {
+                        Button("Copia stile") { model.copyToPasteboard(model.sunoStyle) }.buttonStyle(NeonButtonStyle(prominent: false))
+                        Button("Copia testo") { model.copyToPasteboard(model.sunoLyrics) }.buttonStyle(NeonButtonStyle(prominent: false))
+                        Button("Copia titolo") { model.copyToPasteboard(model.req.title) }.buttonStyle(NeonButtonStyle(prominent: false))
+                        Button("Apri Suno") { NSWorkspace.shared.open(URL(string: "https://suno.com/create")!) }.buttonStyle(NeonButtonStyle())
+                    }
+                }
+                .padding(10).background(RoundedRectangle(cornerRadius: 10).fill(Theme.bg2))
+            }
             if let song = model.result {
                 Divider()
                 Text(song.summary).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cyan)
                 SectionStrip(sections: song.sections, duration: song.sections.last?.end ?? 1, position: 0) { _ in }.frame(height: 22)
                 HStack {
-                    Button("▶ Apri nel Karaoke") {
-                        if let u = model.resultURL { player.load(LibraryItem(url: u), autoplay: true); openKaraoke() }
-                    }.buttonStyle(NeonButtonStyle())
+                    Button("▶ Ascolta") { if let u = model.resultURL { model.listen(u) } }.buttonStyle(NeonButtonStyle())
+                    Button("Apri nel Karaoke") {
+                        if let u = model.resultURL { player.load(LibraryItem(url: u), autoplay: false); openKaraoke() }
+                    }.buttonStyle(NeonButtonStyle(prominent: false))
                     Button("Nuova variante") { model.generate(newVariant: true) }.buttonStyle(NeonButtonStyle(prominent: false))
                     Button("MP3") { model.exportAudio(format: .mp3) }.buttonStyle(NeonButtonStyle(prominent: false))
                     Button("WAV") { model.exportAudio(format: .wav) }.buttonStyle(NeonButtonStyle(prominent: false))

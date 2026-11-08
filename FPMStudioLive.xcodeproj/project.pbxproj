@@ -24,6 +24,7 @@
 		08CA720700C8558C03A832AB /* Mastering.swift */ = {isa = PBXBuildFile; fileRef = 8F140C130442484862EF5EFC; };
 		8A941AB3D2D76464E4B8B621 /* MicEngine.swift */ = {isa = PBXBuildFile; fileRef = D0E456BA6FA68C3660ED236C; };
 		2F62514B110669242B7FFD0E /* OfflineRenderer.swift */ = {isa = PBXBuildFile; fileRef = E0A636DBFC3F223E732D4DFD; };
+		8C5ECEF68ED4F300402EC753 /* PreviewPlayer.swift */ = {isa = PBXBuildFile; fileRef = 87D5FC5B45D38C4A63AD73EE; };
 		FB1AE0D81BBF2E6588167073 /* CDG.swift */ = {isa = PBXBuildFile; fileRef = 3F68FA4ED2C6EB6535CDDAB0; };
 		304AF6FF922E55EC92BE272C /* Chord.swift */ = {isa = PBXBuildFile; fileRef = 586C48A1E73175CB24E1C4F1; };
 		4CA8CAFB49BEAFFE7167493E /* ChordEngine.swift */ = {isa = PBXBuildFile; fileRef = A6B2A5332B811656C786B90F; };
@@ -72,6 +73,7 @@
 		8F140C130442484862EF5EFC /* Mastering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Mastering.swift"; sourceTree = "<group>"; };
 		D0E456BA6FA68C3660ED236C /* MicEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MicEngine.swift"; sourceTree = "<group>"; };
 		E0A636DBFC3F223E732D4DFD /* OfflineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OfflineRenderer.swift"; sourceTree = "<group>"; };
+		87D5FC5B45D38C4A63AD73EE /* PreviewPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PreviewPlayer.swift"; sourceTree = "<group>"; };
 		3F68FA4ED2C6EB6535CDDAB0 /* CDG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CDG.swift"; sourceTree = "<group>"; };
 		586C48A1E73175CB24E1C4F1 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Chord.swift"; sourceTree = "<group>"; };
 		A6B2A5332B811656C786B90F /* ChordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChordEngine.swift"; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 				8F140C130442484862EF5EFC,
 				D0E456BA6FA68C3660ED236C,
 				E0A636DBFC3F223E732D4DFD,
+				87D5FC5B45D38C4A63AD73EE,
 			); path = "Audio"; sourceTree = "<group>"; };
 		39173558B7F8BBD9119F85A1 /* Core */ = {isa = PBXGroup; children = (
 				3F68FA4ED2C6EB6535CDDAB0,
@@ -250,6 +253,7 @@
 				08CA720700C8558C03A832AB,
 				8A941AB3D2D76464E4B8B621,
 				2F62514B110669242B7FFD0E,
+				8C5ECEF68ED4F300402EC753,
 				FB1AE0D81BBF2E6588167073,
 				304AF6FF922E55EC92BE272C,
 				4CA8CAFB49BEAFFE7167493E,

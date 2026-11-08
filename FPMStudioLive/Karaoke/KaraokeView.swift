@@ -292,6 +292,7 @@ struct MicPanel: View {
 struct SetlistPanel: View {
     @ObservedObject var player: KaraokePlayer
     @ObservedObject var library: Library
+    @State private var dropTarget = false
     var body: some View {
         Panel(title: "Scaletta della serata", icon: "list.number") {
             if library.setlist.isEmpty {
@@ -317,6 +318,13 @@ struct SetlistPanel: View {
                     }
                     .onMove { library.setlist.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { library.setlist.remove(atOffsets: $0) }
+                    // Trascinamento dentro la lista (MIDI, MP3, video, dall'archivio o dal Finder).
+                    .onInsert(of: [.fileURL]) { index, providers in
+                        DropHelper.urls(from: providers) { urls in
+                            let items = urls.filter { SongKind.of($0) != nil }.map { LibraryItem(url: $0) }
+                            library.setlist.insert(contentsOf: items, at: min(index, library.setlist.count))
+                        }
+                    }
                 }
                 .frame(minHeight: 120)
             }
@@ -327,14 +335,12 @@ struct SetlistPanel: View {
                 Button("Svuota") { library.setlist.removeAll() }.buttonStyle(NeonButtonStyle(prominent: false)).disabled(library.setlist.isEmpty)
             }
         }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            for p in providers {
-                _ = p.loadObject(ofClass: URL.self) { url, _ in
-                    guard let u = url, SongKind.of(u) != nil else { return }
-                    DispatchQueue.main.async { library.setlist.append(LibraryItem(url: u)) }
-                }
+        .onDrop(of: [.fileURL], isTargeted: $dropTarget) { providers in
+            DropHelper.urls(from: providers) { urls in
+                library.setlist += urls.filter { SongKind.of($0) != nil }.map { LibraryItem(url: $0) }
             }
             return true
         }
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.magenta, lineWidth: dropTarget ? 2 : 0))
     }
 }

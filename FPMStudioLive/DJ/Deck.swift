@@ -59,6 +59,14 @@ final class Deck: ObservableObject, Identifiable {
         self.id = id
         self.nodes = nodes
         applyVolume()
+        NotificationCenter.default.addObserver(forName: AudioHub.restartedNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, self.isPlaying else { return }
+            self.updatePosition()
+            let p = self.position
+            self.isPlaying = false
+            self.seek(to: p)
+            self.play()
+        }
     }
 
     private func applyVolume() { nodes.volume.outputVolume = Float(volume * crossfadeGain) }
@@ -89,12 +97,11 @@ final class Deck: ObservableObject, Identifiable {
                     // ZIP/MP3+G, e MP3 che Core Audio non apre direttamente (convertiti una volta in cache).
                     audioURL = try AudioDecode.playableURL(MediaResolver.resolve(url).audio)
                 }
-                let f = try AVAudioFile(forReading: audioURL)
+                let f = try AVAudioFile(forReading: AudioDecode.engineReadyURL(audioURL, format: AudioHub.shared.engineFormat))
                 let an = try? AudioAnalyzer.analyze(url: audioURL) { p in
                     DispatchQueue.main.async { self.loadProgress = (isMIDI ? 0.7 : 0) + p * (isMIDI ? 0.3 : 1) }
                 }
                 DispatchQueue.main.async {
-                    self.connect(format: f.processingFormat)
                     self.file = f
                     self.beats = an?.beats ?? []
                     self.downbeatOffset = an?.downbeatOffset ?? 0

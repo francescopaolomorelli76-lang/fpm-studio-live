@@ -24,19 +24,18 @@ struct DJView: View {
     private var centerColumn: some View {
         Panel(title: "Mix", icon: "dial.medium") {
             VStack(spacing: 14) {
-                Button(action: { dj.mixNow() }) {
+                Button(action: {
+                    // Se la playlist è vuota, prende i brani della scaletta del karaoke.
+                    if dj.playlist.isEmpty { dj.playlist = library.setlist.map { $0.url } }
+                    dj.atomix()
+                }) {
                     VStack(spacing: 4) {
                         Image(systemName: "arrow.left.arrow.right.circle.fill").font(.system(size: 30))
-                        Text("MIX").font(.system(size: 16, weight: .heavy))
-                        Text("passa al brano in attesa").font(.system(size: 9))
-                    }.frame(maxWidth: .infinity, minHeight: 86)
+                        Text("ATOMIX").font(.system(size: 18, weight: .heavy))
+                        Text(dj.automix ? "sfuma e passa al prossimo" : "avvia e mixa in automatico").font(.system(size: 9))
+                    }.frame(maxWidth: .infinity, minHeight: 92)
                 }.buttonStyle(NeonButtonStyle())
-                .help("Miscela il brano che suona con quello in attesa sull'altro deck")
-                Button(action: { dj.automix.toggle() }) {
-                    Label(dj.automix ? "AUTOMIX ON" : "AUTOMIX", systemImage: dj.automix ? "wand.and.stars" : "wand.and.rays")
-                        .frame(maxWidth: .infinity)
-                }.buttonStyle(NeonButtonStyle(prominent: dj.automix))
-                .help("A fine brano mixa da solo con il successivo della playlist")
+                .help("Un clic: sfuma il brano che suona e passa al successivo. Poi continua da solo finché ci sono brani in coda.")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Dissolvenza \(Int(dj.crossfadeSeconds)) s").font(.caption).foregroundColor(Theme.soft)
                     Slider(value: Binding(get: { dj.crossfadeSeconds }, set: { dj.crossfadeSeconds = $0; settings.crossfadeSeconds = $0 }), in: 2...20, step: 1)

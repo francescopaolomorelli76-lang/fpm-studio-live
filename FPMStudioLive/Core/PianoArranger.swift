@@ -1,10 +1,11 @@
 import Foundation
 
 enum PianoStyle: String, CaseIterable, Identifiable, Codable {
-    case followOriginal, automatic, ballad, pop, arpeggio, sustained
+    case repeated4, followOriginal, automatic, ballad, pop, arpeggio, sustained
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .repeated4: return "Ribattuto in 4 (accompagnamento per il cantante)"
         case .followOriginal: return "Segue la base originale (stesso ritmo e struttura)"
         case .automatic: return "Automatico (per sezione)"
         case .ballad: return "Ballata"
@@ -29,7 +30,7 @@ enum AccompanimentMode: String, CaseIterable, Identifiable, Codable {
 
 struct PianoOptions: Codable, Equatable {
     var mode: AccompanimentMode = .pianoFromChords
-    var style: PianoStyle = .followOriginal
+    var style: PianoStyle = .repeated4
     var program: Int = 0                // 0 Gran coda, 1 Brillante, 4 Rhodes
     var simplifyToTriads: Bool = false
     var keepOriginalBass: Bool = false
@@ -109,7 +110,7 @@ struct PianoArranger {
     }
 
     private func style(for kind: SectionKind) -> PianoStyle {
-        if options.style != .automatic && options.style != .followOriginal { return options.style }
+        if ![.automatic, .followOriginal, .repeated4].contains(options.style) { return options.style }
         switch kind {
         case .intro, .outro: return .arpeggio
         case .verse: return .ballad
@@ -135,6 +136,7 @@ struct PianoArranger {
 
     private func pianoEvents() -> [MIDIWriter.TrackEvent] {
         if options.style == .followOriginal { return followingEvents() }
+        if options.style == .repeated4 { return repeatedEvents() }
         let ch = UInt8(pianoChannel)
         var ev: [MIDIWriter.TrackEvent] = [
             .init(tick: 0, bytes: [0xB0 | ch, 0, 0]),
@@ -265,7 +267,7 @@ struct PianoArranger {
                         let dur = min(remaining, eighth * 2)
                         note(firstHit ? start : tt, dur, p, vel(dyn, accent: accent * (st == .ballad ? 0.78 : 0.82)))
                     }
-                case .pop, .automatic, .followOriginal:
+                case .pop, .automatic, .followOriginal, .repeated4:
                     // Mano sinistra: ottave su 1 e 3, anticipo sul "e" del 4 nei ritornelli.
                     if firstHit || isDownbeat {
                         note(hitTick, min(remaining, pulse * 2 - eighth / 2), bassNote, vel(dyn, accent: 1.05))
@@ -290,6 +292,80 @@ struct PianoArranger {
                 }
                 firstHit = false
                 t += eighth
+            }
+        }
+        return ev
+    }
+
+    /// Accompagnamento semplice per il cantante: l'accordo ribattuto a ogni quarto (accento sull'1),
+    /// la sinistra suona il basso sull'1 e sul 3 (in 3/4 solo sull'1). Accordi, tempi e struttura restano quelli del brano.
+    private func repeatedEvents() -> [MIDIWriter.TrackEvent] {
+        let ch = UInt8(pianoChannel)
+        var ev: [MIDIWriter.TrackEvent] = [
+            .init(tick: 0, bytes: [0xB0 | ch, 0, 0]), .init(tick: 0, bytes: [0xB0 | ch, 32, 0]),
+            .init(tick: 0, bytes: [0xC0 | ch, UInt8(options.program.clamped(0, 127))]),
+            .init(tick: 0, bytes: [0xB0 | ch, 7, 110]), .init(tick: 0, bytes: [0xB0 | ch, 10, 64]),
+            // Suono secco: niente riverbero, chorus né pedale.
+            .init(tick: 0, bytes: [0xB0 | ch, 91, 0]), .init(tick: 0, bytes: [0xB0 | ch, 93, 0]), .init(tick: 0, bytes: [0xB0 | ch, 64, 0])
+        ]
+        let beat = midi.ticksPerBeat
+        // Confini d'accordo sul quarto più vicino (se vicini), così non ci sono mai due colpi ravvicinati.
+        func snap(_ t: Int) -> Int {
+            let r = t % beat
+            let near = r > beat / 2 ? t - r + beat : t - r
+            return abs(near - t) <= beat / 3 ? near : t
+        }
+        var chords: [(start: Int, end: Int, chord: Chord)] = []
+        for r in regions {
+            guard let c = r.chord else { continue }
+            let a = snap(r.startTick), b = snap(r.endTick)
+            guard b > a else { continue }
+            chords.append((a, b, options.simplifyToTriads ? c.triad : c))
+        }
+        guard !chords.isEmpty else { return ev }
+        let sig = midi.mainTimeSignature
+        let bar = midi.ticksPerBar
+        var rng = Rand(state: 0xC0FFEE)
+        var prev = [60, 64, 67]
+        for c in chords {
+            let kind = sectionKind(atTick: c.start)
+            let dyn = (kind == .chorus ? 1.12 : (kind == .intro || kind == .outro ? 0.85 : 1.0)) * options.dynamics
+            let rh = PianoArranger.voicing(for: c.chord, previous: prev, rich: false, low: 55, high: 76)
+            prev = rh
+            var bassNote = 36 + (c.chord.bass ?? c.chord.root)
+            if bassNote > 48 { bassNote -= 12 }
+            // Colpi: ogni quarto dentro l'accordo; il cambio d'accordo fuori griglia sostituisce il quarto vicino.
+            var hits: [Int] = [c.start]
+            var t = (c.start / beat + 1) * beat
+            if t - c.start < beat / 2 { t += beat }
+            while t < c.end - beat / 4 { hits.append(t); t += beat }
+            for (i, h) in hits.enumerated() {
+                let next = i + 1 < hits.count ? hits[i + 1] : c.end
+                // Staccato secco: ~55% del quarto, tutte le note dell'accordo insieme.
+                let dur = max(beat / 5, Int(Double(min(next - h, beat)) * 0.55))
+                let pos = h % bar
+                let accent = pos == 0 ? 1.0 : (pos == beat * 2 && sig.num == 4 ? 0.9 : 0.8)
+                let jitter = options.humanize ? Double(rng.range(-2, 2)) : 0
+                let v = UInt8((76 * accent * dyn + jitter).rounded().clamped(30, 118))
+                for n in rh {
+                    ev.append(.init(tick: h, bytes: [0x90 | ch, UInt8(n), v]))
+                    ev.append(.init(tick: h + dur, bytes: [0x80 | ch, UInt8(n), 0]))
+                }
+                // Basso: sull'1 (e sul 3 in 4/4) oppure al cambio d'accordo.
+                if pos == 0 || (sig.num == 4 && pos == beat * 2) || i == 0 {
+                    var lhEnd = h + (sig.num == 4 ? beat * 2 : bar)
+                    lhEnd = min(lhEnd, c.end)
+                    let lv = UInt8((80 * (pos == 0 ? 1.0 : 0.9) * dyn).rounded().clamped(30, 118))
+                    ev.append(.init(tick: h, bytes: [0x90 | ch, UInt8(bassNote), lv]))
+                    ev.append(.init(tick: max(h + beat / 4, lhEnd - 6), bytes: [0x80 | ch, UInt8(bassNote), 0]))
+                }
+            }
+        }
+        if let last = chords.last {
+            // Accordo finale tenuto una battuta.
+            for n in prev + [36 + (last.chord.bass ?? last.chord.root)] {
+                ev.append(.init(tick: last.end, bytes: [0x90 | ch, UInt8(n), 70]))
+                ev.append(.init(tick: last.end + bar, bytes: [0x80 | ch, UInt8(n), 0]))
             }
         }
         return ev
@@ -463,4 +539,24 @@ enum GMNames {
     static let families = ["Pianoforte", "Percussioni cromatiche", "Organo", "Chitarra", "Basso", "Archi", "Ensemble", "Ottoni",
                            "Ance", "Flauti", "Synth lead", "Synth pad", "Synth FX", "Etnici", "Percussioni", "Effetti"]
     static func name(_ program: Int) -> String { families[max(0, min(15, program / 8))] }
+
+    static let italianNames: [String] = [
+        "Pianoforte a coda", "Pianoforte brillante", "Piano elettrico a coda", "Honky-tonk", "Piano Rhodes", "Piano FM", "Clavicembalo", "Clavinet",
+        "Celesta", "Glockenspiel", "Carillon", "Vibrafono", "Marimba", "Xilofono", "Campane tubolari", "Dulcimer",
+        "Organo Hammond", "Organo percussivo", "Organo rock", "Organo da chiesa", "Harmonium", "Fisarmonica", "Armonica", "Bandoneón",
+        "Chitarra classica", "Chitarra acustica", "Chitarra jazz", "Chitarra elettrica", "Chitarra stoppata", "Chitarra overdrive", "Chitarra distorta", "Armonici chitarra",
+        "Contrabbasso", "Basso elettrico (dita)", "Basso elettrico (plettro)", "Basso fretless", "Basso slap 1", "Basso slap 2", "Basso synth 1", "Basso synth 2",
+        "Violino", "Viola", "Violoncello", "Contrabbasso archi", "Archi tremolo", "Archi pizzicato", "Arpa", "Timpani",
+        "Archi", "Archi lenti", "Archi synth 1", "Archi synth 2", "Coro Aah", "Voce Ooh", "Voce synth", "Orchestra hit",
+        "Tromba", "Trombone", "Tuba", "Tromba sordina", "Corno", "Sezione fiati", "Fiati synth 1", "Fiati synth 2",
+        "Sax soprano", "Sax contralto", "Sax tenore", "Sax baritono", "Oboe", "Corno inglese", "Fagotto", "Clarinetto",
+        "Ottavino", "Flauto", "Flauto dolce", "Flauto di Pan", "Bottiglia", "Shakuhachi", "Fischio", "Ocarina",
+        "Lead quadra", "Lead dente di sega", "Lead calliope", "Lead chiff", "Lead charang", "Lead voce", "Lead quinte", "Lead basso+lead",
+        "Pad new age", "Pad caldo", "Pad polysynth", "Pad coro", "Pad archetto", "Pad metallico", "Pad halo", "Pad sweep",
+        "FX pioggia", "FX colonna sonora", "FX cristallo", "FX atmosfera", "FX luminoso", "FX goblin", "FX eco", "FX sci-fi",
+        "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba", "Cornamusa", "Fiddle", "Shanai",
+        "Campanella", "Agogo", "Steel drum", "Woodblock", "Taiko", "Tom melodico", "Batteria synth", "Piatto rovesciato",
+        "Rumore corde", "Respiro", "Mare", "Uccellini", "Telefono", "Elicottero", "Applausi", "Sparo"
+    ]
+    static func italian(_ p: Int) -> String { italianNames.indices.contains(p) ? italianNames[p] : "Programma \(p)" }
 }

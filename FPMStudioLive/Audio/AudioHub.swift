@@ -22,6 +22,9 @@ final class AudioHub {
     private(set) var deckA: DeckNodes!
     private(set) var deckB: DeckNodes!
     private(set) var started = false
+    /// Formato fisso di tutti i collegamenti (stereo alla frequenza della scheda audio): non si ricollega mai mentre suona.
+    private(set) var engineFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
+    static let restartedNotification = Notification.Name("FPMAudioEngineRestarted")
     var lastError: String?
 
     struct DeckNodes {
@@ -36,6 +39,7 @@ final class AudioHub {
         let format = e.outputNode.outputFormat(forBus: 0)
         let sr = format.sampleRate > 0 ? format.sampleRate : 44100
         let stereo = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 2)!
+        engineFormat = stereo
 
         let nodes: [AVAudioNode] = [synth.node, synthEQ, synthReverb, filePlayer, fileTimePitch, karaokeMixer, djMixer]
         nodes.forEach { e.attach($0) }
@@ -101,6 +105,8 @@ final class AudioHub {
     private func restart() {
         engine.stop()
         start()
+        // I lettori riprendono dal punto in cui erano (cambio cuffie/scheda audio).
+        NotificationCenter.default.post(name: AudioHub.restartedNotification, object: nil)
     }
 
     /// Sostituisce lo strumento delle basi MIDI (SoundFont di sistema o plugin Audio Unit).

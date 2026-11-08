@@ -197,26 +197,90 @@ enum SongStructureAnalyzer {
         return out
     }
 
-    /// Senza voce né testo: segmenta per frasi di accordi ripetute.
+    /// Senza voce né testo: frasi di 8 battute; il ritornello è la frase ripetuta con più energia,
+    /// l'intro/il finale sono le parti iniziali/finali più deboli.
     private static func chordOnlySections(_ input: Input, barChords: [String]) -> [SongSection] {
         let n = input.bars.count
-        let phrase = 8
-        var out: [SongSection] = []
-        var seen: [String: Int] = [:]
+        let phrase = n > 48 ? 8 : 4
+        let dens = input.density.count == n ? input.density : [Double](repeating: 1, count: n)
+        struct P { var a: Int; var b: Int; var sig: String; var e: Double }
+        var ps: [P] = []
         var b = 0
-        var counters: [SectionKind: Int] = [:]
+        // Intro: battute iniziali sotto il 60% dell'energia media.
+        let mean = dens.reduce(0, +) / Double(max(1, n))
+        var introEnd = 0
+        while introEnd < min(8, n) && dens[introEnd] < mean * 0.6 { introEnd += 1 }
+        if introEnd >= 2 { ps.append(P(a: 0, b: introEnd - 1, sig: "intro", e: 0)); b = introEnd }
         while b < n {
             let e = min(n - 1, b + phrase - 1)
-            let sig = barChords[b...e].joined(separator: ",")
-            let kind: SectionKind
-            if b == 0 && n > 16 { kind = .intro }
-            else if e == n - 1 && n > 16 { kind = .outro }
-            else { kind = (seen[sig, default: 0] >= 1) ? .chorus : .verse }
-            seen[sig, default: 0] += 1
-            counters[kind, default: 0] += 1
-            out.append(SongSection(kind: kind, start: input.bars[b], end: e + 1 < n ? input.bars[e + 1] : input.duration, number: counters[kind]!))
+            let en = dens[b...e].reduce(0, +) / Double(e - b + 1)
+            ps.append(P(a: b, b: e, sig: barChords[b...e].joined(separator: ","), e: en))
             b = e + 1
         }
+        var counts: [String: Int] = [:]
+        for p in ps { counts[p.sig, default: 0] += 1 }
+        let repeatedE = ps.filter { $0.sig != "intro" && (counts[$0.sig] ?? 0) >= 2 }.map { $0.e }
+        let threshold = repeatedE.isEmpty ? mean * 1.05 : (repeatedE.reduce(0, +) / Double(repeatedE.count))
+        var out: [SongSection] = []
+        var counters: [SectionKind: Int] = [:]
+        for (i, p) in ps.enumerated() {
+            let kind: SectionKind
+            if p.sig == "intro" { kind = .intro }
+            else if i == ps.count - 1 && p.e < mean * 0.75 && ps.count > 3 { kind = .outro }
+            else if p.e >= threshold * 1.02 { kind = .chorus }
+            else { kind = .verse }
+            if let last = out.last, last.kind == kind, kind != .intro {
+                out[out.count - 1].end = p.b + 1 < n ? input.bars[p.b + 1] : input.duration
+                continue
+            }
+            counters[kind, default: 0] += 1
+            out.append(SongSection(kind: kind, start: input.bars[p.a], end: p.b + 1 < n ? input.bars[p.b + 1] : input.duration, number: counters[kind]!))
+        }
+        if !out.isEmpty { out[0].start = 0; out[out.count - 1].end = input.duration }
+        return out
+    }
+
+    // MARK: - Marker del produttore (basi M-Live e altre)
+
+    /// Se il MIDI contiene i marker di struttura ("Intro", "Verse 1", "Chorus 1", "Coda", "Fine"…) li usa così come sono.
+    static func fromMarkers(_ midi: MIDIFile) -> [SongSection]? {
+        var marks: [(t: Double, name: String)] = []
+        for e in midi.events {
+            if case .meta(let type, let data) = e.kind, type == 0x06 {
+                let n = TextDecoding.decode(data).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !n.isEmpty { marks.append((midi.seconds(atTick: e.tick), n)) }
+            }
+        }
+        guard marks.count >= 3 else { return nil }
+        func kind(_ n: String, next: String?) -> SectionKind? {
+            let l = n.lowercased()
+            if l.hasPrefix("intro") { return .intro }
+            if l.hasPrefix("verse") || l.hasPrefix("strofa") || l.hasPrefix("vers") { return .verse }
+            if l.hasPrefix("pre") { return .preChorus }
+            if l.hasPrefix("bridge") || l.hasPrefix("ponte") {
+                // Nelle basi italiane il "Bridge" tra strofa e ritornello è un pre-ritornello.
+                if let nx = next?.lowercased(), nx.hasPrefix("chorus") || nx.hasPrefix("rit") { return .preChorus }
+                return .bridge
+            }
+            if l.hasPrefix("chorus") || l.hasPrefix("rit") || l.hasPrefix("refrain") { return .chorus }
+            if l.hasPrefix("special") { return .bridge }
+            if l.hasPrefix("instr") || l.hasPrefix("interl") || l.hasPrefix("solo") || l.hasPrefix("strum") { return .instrumental }
+            if l.hasPrefix("coda") || l.hasPrefix("outro") || l.hasPrefix("finale") || l.hasPrefix("ending") { return .outro }
+            return nil
+        }
+        var out: [SongSection] = []
+        var counters: [SectionKind: Int] = [:]
+        for (i, m) in marks.enumerated() {
+            let l = m.name.lowercased()
+            if l == "fine" || l == "end" { if !out.isEmpty { out[out.count - 1].end = m.t }; continue }
+            guard let k = kind(m.name, next: i + 1 < marks.count ? marks[i + 1].name : nil) else { continue }
+            let end = i + 1 < marks.count ? marks[i + 1].t : midi.duration
+            counters[k, default: 0] += 1
+            out.append(SongSection(kind: k, start: m.t, end: end, number: counters[k]!, label: m.name))
+        }
+        guard out.count >= 2 else { return nil }
+        if out[0].start > 0.5 { out[0].start = 0 }
+        if let last = out.last, last.end < midi.duration - 0.5, marks.last?.name.lowercased() != "fine" { out[out.count - 1].end = midi.duration }
         return out
     }
 

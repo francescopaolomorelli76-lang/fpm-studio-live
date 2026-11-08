@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import Combine
 
 /// Piano Studio: dal MIDI ricava accordi e struttura e crea un accompagnamento pianistico
 /// professionale (senza melodia) da esportare in MP3/WAV/M4A/MIDI, intero o per parti.
@@ -17,7 +18,20 @@ final class PianoStudioModel: ObservableObject {
         }
     }
 
+    enum ListenMode: String, CaseIterable, Identifiable {
+        case original, piano, pianoMelody
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .original: return "Originale"
+            case .piano: return "Pianoforte"
+            case .pianoMelody: return "Piano + melodia"
+            }
+        }
+    }
+
     @Published private(set) var sourceURL: URL?
+    @Published private(set) var sourceIsAudio = false
     @Published private(set) var midi: MIDIFile?
     @Published private(set) var analysis: ChordEngine.Analysis?
     @Published var sections: [SongSection] = []
@@ -31,22 +45,69 @@ final class PianoStudioModel: ObservableObject {
     @Published var mastering: Mastering.Mode = .pro
     @Published var format: ExportFormat = .mp3
     @Published var scope: Scope = .whole
-    @Published var reverb: Double = 18
+    @Published var reverb: Double = 0
+    /// SoundFont del pianoforte, indipendente dal karaoke ("" = lo stesso del karaoke).
+    @Published var pianoSoundFont = UserDefaults.standard.string(forKey: "pianoSoundFont") ?? "" {
+        didSet { UserDefaults.standard.set(pianoSoundFont, forKey: "pianoSoundFont") }
+    }
+    @Published var listenMode: ListenMode = .piano
     @Published private(set) var busy = false
     @Published private(set) var progress = 0.0
     @Published var status = ""
     @Published private(set) var chordSummary: [ChordEvent] = []
-    @Published private(set) var previewing = false
-    @Published private(set) var playhead: Double = 0
-    private var playheadTimer: Timer?
+    @Published private(set) var chordSource = ""
+    let preview = PreviewPlayer()
     private(set) var generated: MIDIFile?
+    private var regions: [ChordRegion] = []
     private var lyrics: KaraokeLyrics?
-    private var savedOnEnd: (() -> Void)?
 
+    var duration: Double { sourceIsAudio ? (midi?.duration ?? 0) : (midi?.duration ?? 0) }
+    var playhead: Double { preview.songPosition }
+    var previewing: Bool { preview.isPlaying }
+
+    var pianoSoundFontURL: URL? {
+        if pianoSoundFont.isEmpty { return AppSettings.shared.soundFontURL }
+        if pianoSoundFont == AppSettings.appleSounds { return nil }
+        if pianoSoundFont == "bundled" { return AppSettings.bundledSoundFont }
+        return URL(fileURLWithPath: pianoSoundFont)
+    }
+
+    /// SoundFont disponibili per il pianoforte.
+    var soundFontChoices: [(id: String, name: String)] {
+        var out: [(String, String)] = [("", "Come il karaoke (\(AppSettings.shared.soundFontName))"), ("bundled", "GeneralUser GS (incluso)"),
+                                       (AppSettings.appleSounds, "Suoni di sistema Apple")]
+        let dir = AppPaths.support.appendingPathComponent("SoundFont", isDirectory: true)
+        for u in ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            where ["sf2", "dls"].contains(u.pathExtension.lowercased()) {
+            out.append((u.path, u.deletingPathExtension().lastPathComponent))
+        }
+        let custom = AppSettings.shared.soundFontPath
+        if !custom.isEmpty, custom != AppSettings.appleSounds, !out.contains(where: { $0.0 == custom }) {
+            out.append((custom, URL(fileURLWithPath: custom).deletingPathExtension().lastPathComponent))
+        }
+        if !pianoSoundFont.isEmpty, !out.contains(where: { $0.0 == pianoSoundFont }) {
+            out.append((pianoSoundFont, URL(fileURLWithPath: pianoSoundFont).deletingPathExtension().lastPathComponent))
+        }
+        return out.map { (id: $0.0, name: $0.1) }
+    }
+
+    init() {
+        // Il lettore cambia stato: aggiorno la vista (cursore, play/pausa).
+        preview.objectWillChange.receive(on: DispatchQueue.main).sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &bag)
+    }
+    private var bag = Set<AnyCancellable>()
+
+    /// Apre un MIDI/KAR oppure un brano audio (MP3, M4A, WAV, ZIP MP3+G).
     func open(_ url: URL) {
+        preview.stop()
+        if SongKind.of(url) == .midi { openMIDI(url) } else { openAudio(url) }
+    }
+
+    private func openMIDI(_ url: URL) {
         do {
             let m = try MIDIFile(url: url)
             sourceURL = url
+            sourceIsAudio = false
             midi = m
             let side = SongSidecar.load(for: url)
             let lyr = side?.lyrics ?? m.karaokeLyrics()
@@ -55,33 +116,92 @@ final class PianoStudioModel: ObservableObject {
             analysis = an
             melodyChannel = an.melodyChannel
             channelNames = m.usedChannels.filter { $0 != 9 }.map { ch in
-                let track = m.notes.first { $0.channel == ch }.flatMap { m.trackNames[$0.track] } ?? ""
-                return (ch, "Canale \(ch + 1) · " + (track.isEmpty ? GM.name(m.programs[ch] ?? 0) : track))
+                (ch, "Canale \(ch + 1) · " + m.channelDisplayName(ch, extraTitles: [lyr.title, url.deletingPathExtension().lastPathComponent]))
             }
-            chordSummary = ChordEngine.events(an.regions, midi: m)
-            sections = side?.sections ?? SongStructureAnalyzer.analyze(
+            let embedded = m.embeddedChords()
+            if !embedded.isEmpty {
+                regions = ChordEngine.regions(fromEmbedded: embedded, midi: m)
+                chordSummary = embedded
+                chordSource = "accordi scritti dal produttore"
+            } else {
+                regions = an.regions
+                chordSummary = ChordEngine.events(an.regions, midi: m)
+                chordSource = "accordi riconosciuti"
+            }
+            sections = side?.sections ?? SongStructureAnalyzer.fromMarkers(m) ?? SongStructureAnalyzer.analyze(
                 SongStructureAnalyzer.input(midi: m, lyrics: lyr, chords: chordSummary, melodyChannel: an.melodyChannel))
             selected = Set(sections.map { $0.id })
             generated = nil
             status = "Tonalità \(KeyDetector.name(root: an.key.root, minor: an.key.minor, notation: AppSettings.shared.notation)) · " +
-                "\(chordSummary.count) accordi · \(sections.count) sezioni" + (an.usedFallback ? " · accordi ricavati dalle tracce polifoniche" : "")
+                "\(chordSummary.count) \(chordSource) · \(sections.count) sezioni" + (SongStructureAnalyzer.fromMarkers(m) != nil ? " (marker del produttore)" : "")
         } catch {
             status = error.localizedDescription
         }
     }
 
+    /// Brano audio: accordi, tempo, battere e struttura ricavati dall'analisi dell'audio.
+    private func openAudio(_ url: URL) {
+        busy = true; progress = 0; status = "Analizzo il brano audio (accordi, tempo, struttura)…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let audio = try AudioDecode.playableURL(MediaResolver.resolve(url).audio)
+                let r = try AudioAnalyzer.analyze(url: audio) { p in DispatchQueue.main.async { self.progress = p } }
+                let firstDown = r.bars.first(where: { $0 > 0.05 }) ?? r.leadIn
+                let skel = MIDIFile.skeleton(bpm: r.bpm, firstDownbeat: firstDown, duration: r.duration)
+                let found = LyricsSources.find(for: url)
+                let input = SongStructureAnalyzer.Input(bars: r.bars, duration: r.duration, musicStart: r.leadIn, lyrics: found?.lyrics,
+                                                        chords: r.chords, vocalTimes: [], density: r.barEnergy)
+                let secs = SongStructureAnalyzer.analyze(input)
+                DispatchQueue.main.async {
+                    self.busy = false
+                    self.sourceURL = url
+                    self.sourceIsAudio = true
+                    self.midi = skel
+                    self.analysis = nil
+                    self.melodyChannel = nil
+                    self.channelNames = []
+                    self.lyrics = found?.lyrics
+                    self.regions = ChordEngine.regions(fromEmbedded: r.chords.filter { $0.chord != nil }, midi: skel)
+                    self.chordSummary = r.chords
+                    self.chordSource = "accordi ricavati dall'audio"
+                    self.sections = secs
+                    self.selected = Set(secs.map { $0.id })
+                    self.generated = nil
+                    if self.options.mode != .pianoFromChords { self.options.mode = .pianoFromChords }
+                    if self.options.style == .followOriginal { self.options.style = .repeated4 }
+                    self.status = "Audio: \(Int(r.bpm.rounded())) BPM · \(KeyDetector.name(root: r.keyRoot, minor: r.keyMinor, notation: AppSettings.shared.notation)) · \(r.chords.count) accordi ricavati dall'audio · \(secs.count) sezioni"
+                }
+            } catch {
+                DispatchQueue.main.async { self.busy = false; self.status = "Non riesco ad analizzare il brano: \(error.localizedDescription)" }
+            }
+        }
+    }
+
     func chooseFile() {
         let p = NSOpenPanel()
-        p.allowedContentTypes = ["mid", "midi", "kar"].compactMap { UTType(filenameExtension: $0) }
+        p.allowedContentTypes = SongKind.extensions.filter { !["mp4", "mov", "m4v"].contains($0) }.compactMap { UTType(filenameExtension: $0) }
         if p.runModal() == .OK, let u = p.url { open(u) }
     }
 
     func generate() -> MIDIFile? {
         if let g = generated { return g }
-        guard let m = midi, let an = analysis else { return nil }
-        let data = PianoArranger(midi: m, regions: an.regions, sections: sections, options: options, bassChannels: an.bassChannels, melodyChannel: melodyChannel).arrange()
+        guard let m = midi else { return nil }
+        let data = PianoArranger(midi: m, regions: regions, sections: sections, options: options,
+                                 bassChannels: analysis?.bassChannels ?? [], melodyChannel: melodyChannel).arrange()
         generated = try? MIDIFile(data: data)
         return generated
+    }
+
+    /// Piano + melodia guida originale (solo per l'ascolto).
+    private func pianoWithMelody() -> MIDIFile? {
+        guard let g = generate(), let m = midi else { return nil }
+        guard let mel = melodyChannel, !sourceIsAudio else { return g }
+        var w = MIDIWriter(ppq: m.ppq)
+        w.addTrack("Tempo", m.conductorEvents())
+        let free = mel == 0 ? 1 : mel
+        w.addTrack("Melodia", m.channelEvents([mel], remapTo: [mel: free]))
+        w.addTrack("Piano", g.channelEvents([0]))
+        return try? MIDIFile(data: w.data())
     }
 
     func sectionsChanged() { generated = nil; renumber() }
@@ -91,36 +211,47 @@ final class PianoStudioModel: ObservableObject {
         for i in sections.indices { c[sections[i].kind, default: 0] += 1; sections[i].number = c[sections[i].kind]! }
     }
 
-    // Anteprima nel lettore principale.
+    // MARK: Lettore dedicato del Piano Studio (indipendente dal karaoke)
+
     func togglePreview() {
-        let seq = AudioHub.shared.sequencer
-        if previewing { seq.pause(); stopPreviewState(); seq.onEnd = savedOnEnd; return }
-        guard let g = generate() else { return }
-        savedOnEnd = seq.onEnd
-        AudioHub.shared.start()
-        seq.load(g)
-        seq.setTranspose(transpose)
-        seq.speed = tempo
-        if let first = sections.first(where: { selected.contains($0.id) }), scope != .whole { seq.seek(to: first.start) }
-        seq.onEnd = { [weak self] in self?.stopPreviewState(); seq.onEnd = self?.savedOnEnd }
-        seq.play()
-        previewing = true
-        playheadTimer?.invalidate()
-        playheadTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            self?.playhead = AudioHub.shared.sequencer.position
+        if preview.isPlaying { preview.pause(); return }
+        if preview.url != nil && preview.title == previewTitle { preview.play(); return }
+        startPreview()
+    }
+
+    private var previewTitle: String { (sourceURL?.deletingPathExtension().lastPathComponent ?? "") + " · " + listenMode.label }
+
+    func startPreview(at t: Double? = nil) {
+        guard let src = sourceURL else { return }
+        if listenMode == .original && sourceIsAudio {
+            preview.load(src, title: previewTitle, autoplay: true)
+            if let t = t { preview.seekSong(t) }
+            return
+        }
+        let file: MIDIFile?
+        switch listenMode {
+        case .original: file = midi
+        case .piano: file = generate()
+        case .pianoMelody: file = pianoWithMelody()
+        }
+        guard let f = file else { return }
+        var s = OfflineRenderer.Settings()
+        s.soundBank = listenMode == .original ? AppSettings.shared.soundFontURL : pianoSoundFontURL
+        s.transpose = transpose
+        s.tempo = tempo
+        s.reverb = Float(reverb)
+        if listenMode != .original { s.pluginID = nil }
+        let key = "\(src.path)|\(listenMode.rawValue)|\(options)|\(melodyChannel ?? -1)|\(transpose)|\(tempo)|\(reverb)|\(s.soundBank?.path ?? "apple")|\(sections.map { "\($0.kind.rawValue)\($0.start)" })"
+        preview.loadMIDI(f, key: key, title: previewTitle, settings: s, autoplay: true) { [weak self] in
+            if let t = t { self?.preview.seekSong(t) }
         }
     }
 
-    private func stopPreviewState() {
-        previewing = false
-        playheadTimer?.invalidate()
-    }
-
-    /// Clic sulla barra della struttura: l'anteprima salta lì (e parte, se ferma).
+    /// Clic sulla barra della struttura: il lettore salta lì (e parte, se fermo).
     func seekPreview(_ t: Double) {
-        if !previewing { togglePreview() }
-        AudioHub.shared.sequencer.seek(to: t)
-        playhead = t
+        if preview.url == nil || preview.title != previewTitle { startPreview(at: t); return }
+        preview.seekSong(t)
+        if !preview.isPlaying { preview.play() }
     }
 
     func export() {
@@ -130,7 +261,7 @@ final class PianoStudioModel: ObservableObject {
             let p = NSSavePanel()
             p.nameFieldStringValue = base + ".mid"
             guard p.runModal() == .OK, let u = p.url else { return }
-            let data = PianoArranger(midi: midi!, regions: analysis!.regions, sections: sections, options: options, bassChannels: analysis!.bassChannels, melodyChannel: melodyChannel).arrange()
+            let data = PianoArranger(midi: midi!, regions: regions, sections: sections, options: options, bassChannels: analysis?.bassChannels ?? [], melodyChannel: melodyChannel).arrange()
             do { try data.write(to: u); status = "MIDI salvato: \(u.lastPathComponent)" } catch { status = error.localizedDescription }
             return
         }
@@ -142,7 +273,8 @@ final class PianoStudioModel: ObservableObject {
         let chosen = sections.filter { selected.contains($0.id) }
         let scope = self.scope, format = self.format, mastering = self.mastering
         var settings = OfflineRenderer.Settings()
-        settings.soundBank = AppSettings.shared.soundFontURL
+        settings.soundBank = pianoSoundFontURL
+        if options.mode == .pianoFromChords { settings.pluginID = nil }
         settings.transpose = transpose
         settings.tempo = tempo
         settings.reverb = Float(reverb)
@@ -199,21 +331,31 @@ struct PianoStudioView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(spacing: 12) {
-                Panel(title: "Brano MIDI", icon: "pianokeys") {
+                Panel(title: "Brano (MIDI o audio)", icon: "pianokeys") {
                     HStack {
-                        Text(model.sourceURL?.deletingPathExtension().lastPathComponent ?? "Scegli un MIDI o un KAR (anche dall'archivio, tasto destro → Piano Studio)")
+                        Text(model.sourceURL?.deletingPathExtension().lastPathComponent ?? "Trascina qui un brano dall'archivio o dal Finder (MIDI, KAR, MP3…)")
                             .font(.system(size: 14, weight: .semibold)).lineLimit(1)
                         Spacer()
-                        Button("Apri MIDI…") { model.chooseFile() }.buttonStyle(NeonButtonStyle())
+                        Button("Apri…") { model.chooseFile() }.buttonStyle(NeonButtonStyle())
                     }
-                    if !model.status.isEmpty { Text(model.status).font(.caption).foregroundColor(Theme.soft) }
+                    if model.busy && model.midi == nil { ProgressView(value: model.progress) }
+                    if !model.status.isEmpty { Text(model.status).font(.caption).foregroundColor(Theme.soft).fixedSize(horizontal: false, vertical: true) }
+                    // Lettore dedicato: ascolti l'originale o il pianoforte mentre lavori, senza toccare il karaoke.
+                    HStack {
+                        Picker("", selection: $model.listenMode) { ForEach(PianoStudioModel.ListenMode.allCases) { Text($0.label).tag($0) } }
+                            .pickerStyle(.segmented).labelsHidden().frame(width: 300)
+                        Button(model.previewing ? "Pausa" : "Ascolta") { model.togglePreview() }
+                            .buttonStyle(NeonButtonStyle()).disabled(model.midi == nil)
+                        Button("Da capo") { model.startPreview(at: 0) }.buttonStyle(NeonButtonStyle(prominent: false)).disabled(model.midi == nil)
+                    }
+                    MiniPlayerView(player: model.preview)
                 }
                 Panel(title: "Struttura riconosciuta — scegli le parti", icon: "rectangle.split.3x1") {
                     if model.sections.isEmpty {
                         Text("Nessun brano caricato").font(.caption).foregroundColor(Theme.soft)
                     } else {
                         if let m = model.midi {
-                            SectionStrip(sections: model.sections, duration: m.duration, position: model.playhead) { model.seekPreview($0) }
+                            SectionStrip(sections: model.sections, duration: max(1, m.duration), position: model.playhead) { model.seekPreview($0) }
                                 .frame(height: 28)
                             HStack {
                                 Text(formatTime(model.playhead)).monospacedDigit()
@@ -278,7 +420,10 @@ struct PianoStudioView: View {
                     Picker("Suono", selection: $model.options.program) {
                         Text("Gran coda").tag(0); Text("Pianoforte brillante").tag(1); Text("Piano elettrico a coda").tag(2); Text("Rhodes").tag(4)
                     }
-                    Toggle("Semplifica in triadi", isOn: $model.options.simplifyToTriads)
+                    Picker("Accordi", selection: $model.options.simplifyToTriads) {
+                        Text("Originali (con 7ª, 6ª…)").tag(false)
+                        Text("Solo maggiori e minori").tag(true)
+                    }.pickerStyle(.segmented)
                     if model.options.mode == .pianoFromChords {
                         Toggle("Aggiungi basso originale", isOn: $model.options.keepOriginalBass)
                         Toggle("Aggiungi batteria originale", isOn: $model.options.keepOriginalDrums)
@@ -296,16 +441,22 @@ struct PianoStudioView: View {
                     Picker("Formato", selection: $model.format) { ForEach(ExportFormat.allCases) { Text($0.label).tag($0) } }
                     Picker("Parti", selection: $model.scope) { ForEach(PianoStudioModel.Scope.allCases) { Text($0.label).tag($0) } }
                     Picker("Mastering", selection: $model.mastering) { ForEach(Mastering.Mode.allCases) { Text($0.label).tag($0) } }
-                    SoundPickerMenu(player: player)
+                    Picker("SoundFont del piano", selection: $model.pianoSoundFont) {
+                        ForEach(model.soundFontChoices, id: \.id) { c in Text(c.name).tag(c.id) }
+                    }
                     HStack {
-                        Button(model.previewing ? "■ Ferma" : "▶ Ascolta") { model.togglePreview() }
-                            .buttonStyle(NeonButtonStyle(prominent: false)).disabled(model.midi == nil)
                         Button("Crea \(model.format == .mid ? "MIDI" : "audio")") { model.export() }
                             .buttonStyle(NeonButtonStyle()).disabled(model.midi == nil || model.busy || (model.scope != .whole && model.selected.isEmpty))
                     }
                     if model.busy { ProgressView(value: model.progress).accentColor(Theme.violet) }
                 }
             }.frame(width: 340)
+        }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            DropHelper.urls(from: providers) { urls in
+                if let u = urls.first(where: { SongKind.of($0) != nil && SongKind.of($0) != .video }) { model.open(u) }
+            }
+            return true
         }
     }
 
