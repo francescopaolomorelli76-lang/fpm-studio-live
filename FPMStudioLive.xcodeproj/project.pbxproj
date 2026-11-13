@@ -37,12 +37,18 @@
 		70EA68AE2EF73406DFF4C18F /* MIDIFile.swift */ = {isa = PBXBuildFile; fileRef = 9C8CC3753B3D54BF89B4EF84; };
 		079FB16B8F0343D8CED60F9F /* MIDIWriter.swift */ = {isa = PBXBuildFile; fileRef = 4E8C0B0F57E93C50864F5650; };
 		BF510B445E2793ACDA7FAD1F /* PianoArranger.swift */ = {isa = PBXBuildFile; fileRef = A4BE38F1B29E4C2C0E193EBD; };
+		1E7B8A3E7E75C1AC1B6C51A0 /* Smorfia.swift */ = {isa = PBXBuildFile; fileRef = 07D84AA1366F6C52B82513AE; };
 		20346EBEEA040F31B5455B01 /* SongGenerator.swift */ = {isa = PBXBuildFile; fileRef = 441AB21DAB3279DA563F7A30; };
 		FB36361C06063B35477BD57F /* SongStructure.swift */ = {isa = PBXBuildFile; fileRef = D2D0517CAA37A3AA185ECA6F; };
 		3874FB597C4F26FA930C1348 /* TOTP.swift */ = {isa = PBXBuildFile; fileRef = D33BD12ED639F964043E3CD5; };
+		527A2C2136E358923A7727B0 /* TombolaEngine.swift */ = {isa = PBXBuildFile; fileRef = 60D9CED1ABA9035EE9F7C3F4; };
 		84C13AFEA160D4E0A33ADECD /* DJController.swift */ = {isa = PBXBuildFile; fileRef = 24CB3C2EB7B2F7D2272C4C58; };
 		2B53ABC965C72CF6977D59FF /* DJView.swift */ = {isa = PBXBuildFile; fileRef = DA205542BF0CFE22FED80B38; };
 		1EC1CBA1A062BE26D7951B5E /* Deck.swift */ = {isa = PBXBuildFile; fileRef = 592D1037FE8DD7227FD6753F; };
+		807B600EFB59C66EEBD55E27 /* GamesView.swift */ = {isa = PBXBuildFile; fileRef = D99A9F9F0CD23833F81D30D2; };
+		E4AFC8A261897590075D2F3D /* TombolaGame.swift */ = {isa = PBXBuildFile; fileRef = D3EE748DFB4E4B1E14EAFC08; };
+		768446B515E556776D799697 /* TombolaStageView.swift */ = {isa = PBXBuildFile; fileRef = 5A2F73208CE7A40BD7DE8234; };
+		6D8595BFD02F61098EC49DDC /* TombolaWeb.swift */ = {isa = PBXBuildFile; fileRef = 409F0AB8D337BA61AC18601D; };
 		883DC60D230C61C83A94152E /* KaraokePlayer+Advanced.swift */ = {isa = PBXBuildFile; fileRef = 0D0B6441C4E81A37E30C7BFA; };
 		7CC9C0DDA04CB61B335184DB /* KaraokePlayer.swift */ = {isa = PBXBuildFile; fileRef = 04FF3E195B7AA6B849A00761; };
 		92E4AB4D6DEF5DE76A38E2B9 /* KaraokeView.swift */ = {isa = PBXBuildFile; fileRef = 24ED21CEA468EA4AC7CDB0BA; };
@@ -89,12 +95,18 @@
 		9C8CC3753B3D54BF89B4EF84 /* MIDIFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIFile.swift"; sourceTree = "<group>"; };
 		4E8C0B0F57E93C50864F5650 /* MIDIWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIDIWriter.swift"; sourceTree = "<group>"; };
 		A4BE38F1B29E4C2C0E193EBD /* PianoArranger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PianoArranger.swift"; sourceTree = "<group>"; };
+		07D84AA1366F6C52B82513AE /* Smorfia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Smorfia.swift"; sourceTree = "<group>"; };
 		441AB21DAB3279DA563F7A30 /* SongGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongGenerator.swift"; sourceTree = "<group>"; };
 		D2D0517CAA37A3AA185ECA6F /* SongStructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongStructure.swift"; sourceTree = "<group>"; };
 		D33BD12ED639F964043E3CD5 /* TOTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TOTP.swift"; sourceTree = "<group>"; };
+		60D9CED1ABA9035EE9F7C3F4 /* TombolaEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TombolaEngine.swift"; sourceTree = "<group>"; };
 		24CB3C2EB7B2F7D2272C4C58 /* DJController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJController.swift"; sourceTree = "<group>"; };
 		DA205542BF0CFE22FED80B38 /* DJView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DJView.swift"; sourceTree = "<group>"; };
 		592D1037FE8DD7227FD6753F /* Deck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Deck.swift"; sourceTree = "<group>"; };
+		D99A9F9F0CD23833F81D30D2 /* GamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GamesView.swift"; sourceTree = "<group>"; };
+		D3EE748DFB4E4B1E14EAFC08 /* TombolaGame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TombolaGame.swift"; sourceTree = "<group>"; };
+		5A2F73208CE7A40BD7DE8234 /* TombolaStageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TombolaStageView.swift"; sourceTree = "<group>"; };
+		409F0AB8D337BA61AC18601D /* TombolaWeb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TombolaWeb.swift"; sourceTree = "<group>"; };
 		0D0B6441C4E81A37E30C7BFA /* KaraokePlayer+Advanced.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokePlayer+Advanced.swift"; sourceTree = "<group>"; };
 		04FF3E195B7AA6B849A00761 /* KaraokePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokePlayer.swift"; sourceTree = "<group>"; };
 		24ED21CEA468EA4AC7CDB0BA /* KaraokeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KaraokeView.swift"; sourceTree = "<group>"; };
@@ -131,6 +143,7 @@
 				C0371FE722F9C2F5935E1FD2,
 				39173558B7F8BBD9119F85A1,
 				B821D638A64C97AF6A4771C9,
+				51842A1479C719BF07C4D564,
 				F57D91840811513A58C9FCB3,
 				3789DFDE4ABD975D422EEC10,
 				A7B454664260178F08DECF25,
@@ -176,15 +189,23 @@
 				9C8CC3753B3D54BF89B4EF84,
 				4E8C0B0F57E93C50864F5650,
 				A4BE38F1B29E4C2C0E193EBD,
+				07D84AA1366F6C52B82513AE,
 				441AB21DAB3279DA563F7A30,
 				D2D0517CAA37A3AA185ECA6F,
 				D33BD12ED639F964043E3CD5,
+				60D9CED1ABA9035EE9F7C3F4,
 			); path = "Core"; sourceTree = "<group>"; };
 		B821D638A64C97AF6A4771C9 /* DJ */ = {isa = PBXGroup; children = (
 				24CB3C2EB7B2F7D2272C4C58,
 				DA205542BF0CFE22FED80B38,
 				592D1037FE8DD7227FD6753F,
 			); path = "DJ"; sourceTree = "<group>"; };
+		51842A1479C719BF07C4D564 /* Games */ = {isa = PBXGroup; children = (
+				D99A9F9F0CD23833F81D30D2,
+				D3EE748DFB4E4B1E14EAFC08,
+				5A2F73208CE7A40BD7DE8234,
+				409F0AB8D337BA61AC18601D,
+			); path = "Games"; sourceTree = "<group>"; };
 		F57D91840811513A58C9FCB3 /* Karaoke */ = {isa = PBXGroup; children = (
 				0D0B6441C4E81A37E30C7BFA,
 				04FF3E195B7AA6B849A00761,
@@ -275,12 +296,18 @@
 				70EA68AE2EF73406DFF4C18F,
 				079FB16B8F0343D8CED60F9F,
 				BF510B445E2793ACDA7FAD1F,
+				1E7B8A3E7E75C1AC1B6C51A0,
 				20346EBEEA040F31B5455B01,
 				FB36361C06063B35477BD57F,
 				3874FB597C4F26FA930C1348,
+				527A2C2136E358923A7727B0,
 				84C13AFEA160D4E0A33ADECD,
 				2B53ABC965C72CF6977D59FF,
 				1EC1CBA1A062BE26D7951B5E,
+				807B600EFB59C66EEBD55E27,
+				E4AFC8A261897590075D2F3D,
+				768446B515E556776D799697,
+				6D8595BFD02F61098EC49DDC,
 				883DC60D230C61C83A94152E,
 				7CC9C0DDA04CB61B335184DB,
 				92E4AB4D6DEF5DE76A38E2B9,

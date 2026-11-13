@@ -36,6 +36,7 @@ struct FPMStudioLiveApp: App {
     @StateObject private var web = WebMonitor()
     @StateObject private var recorder = VoiceRecorder()
     @StateObject private var shortcuts = ShortcutManager()
+    @StateObject private var tombola = TombolaGame()
 
     var body: some Scene {
         WindowGroup("FPM Studio Live") {
@@ -53,6 +54,7 @@ struct FPMStudioLiveApp: App {
                 .environmentObject(web)
                 .environmentObject(recorder)
                 .environmentObject(shortcuts)
+                .environmentObject(tombola)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

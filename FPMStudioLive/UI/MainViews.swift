@@ -5,12 +5,13 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case karaoke, dj, piano, ai, advanced
+    case karaoke, dj, games, piano, ai, advanced
     var id: String { rawValue }
     var label: String {
         switch self {
         case .karaoke: return "Karaoke"
         case .dj: return "Atomix"
+        case .games: return "Giochi"
         case .piano: return "Piano Studio"
         case .ai: return "AI Studio"
         case .advanced: return "Funzioni avanzate"
@@ -20,6 +21,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .karaoke: return "music.mic"
         case .dj: return "dial.max"
+        case .games: return "circle.grid.3x3.fill"
         case .piano: return "pianokeys"
         case .ai: return "wand.and.stars"
         case .advanced: return "slider.horizontal.3"
@@ -41,6 +43,7 @@ struct ContentView: View {
     @EnvironmentObject var web: WebMonitor
     @EnvironmentObject var recorder: VoiceRecorder
     @EnvironmentObject var shortcuts: ShortcutManager
+    @EnvironmentObject var tombola: TombolaGame
     @State private var section: AppSection = .karaoke
     @State private var showLibrary = true
     /// L'app si apre solo dopo il codice di attivazione (se la versione lo richiede). Va inserito a ogni apertura.
@@ -65,6 +68,8 @@ struct ContentView: View {
                             KaraokeView(player: player, library: library, mic: mic)
                         case .dj:
                             ScrollView(.vertical) { DJView(dj: dj, library: library).padding(.trailing, 6) }
+                        case .games:
+                            ScrollView(.vertical) { GamesView(tombola: tombola).padding(.trailing, 6) }
                         case .piano:
                             ScrollView(.vertical) { PianoStudioView(model: piano).padding(.trailing, 6) }
                         case .ai:
@@ -100,7 +105,7 @@ struct ContentView: View {
             Image("Logo").resizable().frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 0) {
                 Text("FPM Studio Live").font(.system(size: 18, weight: .heavy)).foregroundStyle(Theme.gradient)
-                Text("Karaoke · DJ · Piano · AI").font(.system(size: 10, weight: .semibold)).tracking(1.5).foregroundColor(Theme.soft)
+                Text("Karaoke · DJ · Giochi · Piano · AI").font(.system(size: 10, weight: .semibold)).tracking(1.5).foregroundColor(Theme.soft)
             }
             Spacer()
             ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) {
