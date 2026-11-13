@@ -149,18 +149,7 @@ struct TombolaStageView: View {
             VStack(spacing: 6 * s) {
                 ForEach(0..<9, id: \.self) { r in
                     HStack(spacing: 6 * s) {
-                        ForEach(1...10, id: \.self) { c in
-                            let n = r * 10 + c
-                            let on = drawn.contains(n)
-                            let isLast = n == game.current
-                            Text("\(n)")
-                                .font(.system(size: 26 * s, weight: .heavy, design: .rounded))
-                                .foregroundColor(on ? Color(red: 0.3, green: 0.04, blue: 0.08) : cream.opacity(0.35))
-                                .frame(maxWidth: .infinity).frame(height: 52 * s)
-                                .background(RoundedRectangle(cornerRadius: 10 * s).fill(on ? (isLast ? Color.white : gold) : Color.white.opacity(0.05)))
-                                .overlay(RoundedRectangle(cornerRadius: 10 * s).stroke(isLast ? xmasRed : Color.clear, lineWidth: 4 * s))
-                                .shadow(color: on ? gold.opacity(0.5) : .clear, radius: 6 * s)
-                        }
+                        ForEach(1...10, id: \.self) { c in boardCell(r * 10 + c, drawn: drawn, s) }
                     }
                 }
             }
@@ -185,6 +174,21 @@ struct TombolaStageView: View {
                 }.padding(.top, 8 * s)
             }
         }
+    }
+
+    private func boardCell(_ n: Int, drawn: Set<Int>, _ s: CGFloat) -> some View {
+        let on: Bool = drawn.contains(n)
+        let isLast: Bool = n == game.current
+        let fg: Color = on ? Color(red: 0.3, green: 0.04, blue: 0.08) : cream.opacity(0.35)
+        let bg: Color = on ? (isLast ? Color.white : gold) : Color.white.opacity(0.05)
+        let corner: CGFloat = 10 * s
+        return Text("\(n)")
+            .font(.system(size: 26 * s, weight: .heavy, design: .rounded))
+            .foregroundColor(fg)
+            .frame(maxWidth: .infinity).frame(height: 52 * s)
+            .background(RoundedRectangle(cornerRadius: corner).fill(bg))
+            .overlay(RoundedRectangle(cornerRadius: corner).stroke(isLast ? xmasRed : Color.clear, lineWidth: 4 * s))
+            .shadow(color: on ? gold.opacity(0.5) : Color.clear, radius: 6 * s)
     }
 
     private func winBanner(_ w: TombolaGame.Win, _ s: CGFloat) -> some View {
@@ -219,9 +223,11 @@ struct SnowView: View {
             Canvas { gc, size in
                 let t = ctx.date.timeIntervalSinceReferenceDate
                 for f in flakes {
-                    let y = ((t * f.speed + f.delay).truncatingRemainder(dividingBy: 1.0)) * (size.height + 20) - 10
-                    let x = f.x * size.width + sin(t * 0.8 + f.phase) * 18
-                    let r = f.size * max(1, size.width / 1600)
+                    let h: Double = Double(size.height), w: Double = Double(size.width)
+                    let fall: Double = (t * f.speed + f.delay).truncatingRemainder(dividingBy: 1.0)
+                    let y: Double = fall * (h + 20) - 10
+                    let x: Double = f.x * w + sin(t * 0.8 + f.phase) * 18
+                    let r: Double = f.size * max(1, w / 1600)
                     gc.fill(Path(ellipseIn: CGRect(x: x, y: y, width: r, height: r)), with: .color(.white.opacity(0.75)))
                 }
             }
@@ -234,26 +240,41 @@ struct ChristmasLights: View {
     private let colors: [Color] = [Color(red: 1, green: 0.3, blue: 0.43), Color(red: 1, green: 0.82, blue: 0.4), Color(red: 0.02, green: 0.84, blue: 0.63), Color(red: 0.3, green: 0.79, blue: 0.94)]
     var body: some View {
         TimelineView(.periodic(from: Date(), by: 0.7)) { ctx in
-            let phase = Int(ctx.date.timeIntervalSinceReferenceDate / 0.7)
             GeometryReader { geo in
-                let n = max(8, Int(geo.size.width / 46))
-                ZStack(alignment: .topLeading) {
-                    Path { p in
-                        p.move(to: .zero)
-                        for i in 0...n {
-                            let x = geo.size.width * CGFloat(i) / CGFloat(n)
-                            p.addQuadCurve(to: CGPoint(x: x, y: 0), control: CGPoint(x: x - geo.size.width / CGFloat(n) / 2, y: geo.size.height * 0.5))
-                        }
-                    }.stroke(Color(red: 0.1, green: 0.25, blue: 0.15), lineWidth: 2)
-                    ForEach(0..<n, id: \.self) { i in
-                        let on = (i + phase) % 3 != 0
-                        Capsule().fill(colors[i % colors.count].opacity(on ? 1 : 0.25))
-                            .shadow(color: on ? colors[i % colors.count] : .clear, radius: 8)
-                            .frame(width: geo.size.height * 0.45, height: geo.size.height * 0.7)
-                            .position(x: geo.size.width * (CGFloat(i) + 0.5) / CGFloat(n), y: geo.size.height * 0.55)
-                    }
-                }
+                lights(size: geo.size, phase: Int(ctx.date.timeIntervalSinceReferenceDate / 0.7))
             }
+        }
+    }
+
+    private func wire(_ size: CGSize, count n: Int) -> Path {
+        var p = Path()
+        p.move(to: .zero)
+        let step = size.width / CGFloat(n)
+        for i in 0...n {
+            let x: CGFloat = step * CGFloat(i)
+            let control = CGPoint(x: x - step / 2, y: size.height * 0.5)
+            p.addQuadCurve(to: CGPoint(x: x, y: 0), control: control)
+        }
+        return p
+    }
+
+    private func bulb(_ i: Int, phase: Int, size: CGSize, count n: Int) -> some View {
+        let on: Bool = (i + phase) % 3 != 0
+        let color: Color = colors[i % colors.count]
+        let x: CGFloat = size.width * (CGFloat(i) + 0.5) / CGFloat(n)
+        let y: CGFloat = size.height * 0.55
+        return Capsule()
+            .fill(color.opacity(on ? 1 : 0.25))
+            .shadow(color: on ? color : Color.clear, radius: 8)
+            .frame(width: size.height * 0.45, height: size.height * 0.7)
+            .position(x: x, y: y)
+    }
+
+    private func lights(size: CGSize, phase: Int) -> some View {
+        let n: Int = max(8, Int(size.width / 46))
+        return ZStack(alignment: .topLeading) {
+            wire(size, count: n).stroke(Color(red: 0.1, green: 0.25, blue: 0.15), lineWidth: 2)
+            ForEach(0..<n, id: \.self) { i in bulb(i, phase: phase, size: size, count: n) }
         }
     }
 }
