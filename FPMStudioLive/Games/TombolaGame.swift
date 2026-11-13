@@ -34,7 +34,12 @@ final class TombolaGame: ObservableObject {
     @Published var voiceID: String { didSet { d.set(voiceID, forKey: "tmb.voice"); voice.voiceID = voiceID } }
     @Published var useElevenLabs: Bool { didSet { d.set(useElevenLabs, forKey: "tmb.eleven"); voice.useEleven = useElevenLabs } }
     @Published var elevenVoiceID: String { didSet { d.set(elevenVoiceID, forKey: "tmb.elevenVoice"); voice.elevenVoice = elevenVoiceID } }
+    /// Premio di consolazione dopo la tombola: la seconda cartella che completa tutti i numeri.
+    @Published var tombolino: Bool { didSet { d.set(tombolino, forKey: "tmb.tombolino") } }
+    /// Trasparenza dell'immagine di sfondo sul maxi schermo (0 = invisibile, 1 = piena).
+    @Published var backgroundOpacity: Double { didSet { d.set(backgroundOpacity, forKey: "tmb.bgOpacity") } }
     @Published private(set) var logo: NSImage?
+    @Published private(set) var backgroundImage: NSImage?
 
     // MARK: Partita
     @Published private(set) var gameID = TombolaGame.newID()
@@ -65,6 +70,7 @@ final class TombolaGame: ObservableObject {
     private var logoPNG: Data?
 
     let voice = TombolaVoice()
+    let music = TombolaMusic()
 
     init() {
         intervalSeconds = d.object(forKey: "tmb.interval") as? Double ?? 90
@@ -77,10 +83,14 @@ final class TombolaGame: ObservableObject {
         voiceID = d.string(forKey: "tmb.voice") ?? ""
         useElevenLabs = d.bool(forKey: "tmb.eleven")
         elevenVoiceID = d.string(forKey: "tmb.elevenVoice") ?? TombolaVoice.defaultElevenVoice
+        tombolino = d.object(forKey: "tmb.tombolino") as? Bool ?? true
+        backgroundOpacity = d.object(forKey: "tmb.bgOpacity") as? Double ?? 0.35
         voice.voiceID = voiceID
         voice.useEleven = useElevenLabs
         voice.elevenVoice = elevenVoiceID
+        voice.onSpeaking = { [weak music] on in music?.duck(on) }
         loadLogo()
+        loadBackground()
         newGame()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
     }
@@ -108,6 +118,7 @@ final class TombolaGame: ObservableObject {
 
     func start() {
         guard !finished, drawn.count < 90 else { return }
+        if music.autoStart && !music.isPlaying && !music.tracks.isEmpty { music.play() }
         if !running {
             running = true
             if drawn.isEmpty {
@@ -176,8 +187,10 @@ final class TombolaGame: ObservableObject {
     private func checkWins(number n: Int) {
         let set = drawnSet
         while let p = currentPrize {
+            // Il tombolino va a una cartella diversa da quelle che hanno già fatto tombola.
+            let tombolaCards = Set(winners.filter { $0.prize == .tombola }.flatMap { $0.cards })
             let winning = players.keys.sorted().compactMap { id in cards.first { $0.id == id } }
-                .filter { TombolaEngine.achieves($0, prize: p, drawn: set) }
+                .filter { TombolaEngine.achieves($0, prize: p, drawn: set) && !(p == .tombolino && tombolaCards.contains($0.id)) }
             guard !winning.isEmpty else { break }
             let ids = winning.map { $0.id }
             let w = Win(prize: p, cards: ids, names: ids.map { players[$0]?.name ?? "" }, number: n)
@@ -185,16 +198,31 @@ final class TombolaGame: ObservableObject {
             currentPrize = p.next
             let who = ids.map { "cartella \($0)" }.joined(separator: " e ")
             let names = w.names.filter { !$0.isEmpty }.joined(separator: " e ")
-            if p == .tombola {
-                voice.say("Tombolaaa! Ha vinto la \(who)" + (names.isEmpty ? "" : ", complimenti \(names)") + "! Buone feste a tutti!", after: 1)
-                finished = true
-                stopTimerOnly()
-            } else {
-                voice.say("Abbiamo un \(p.name)! \(who.prefix(1).uppercased() + who.dropFirst())" + (names.isEmpty ? "" : ", complimenti \(names)") + "!", after: 1)
+            let bravo = names.isEmpty ? "" : ", complimenti \(names)"
+            switch p {
+            case .tombola:
+                if tombolino {
+                    voice.say("Tombolaaa! Ha vinto la \(who)\(bravo)! Ma non è finita: adesso si gioca il tombolino!", after: 1)
+                } else {
+                    voice.say("Tombolaaa! Ha vinto la \(who)\(bravo)! Buone feste a tutti!", after: 1)
+                    currentPrize = nil
+                    finishGame()
+                }
+            case .tombolino:
+                voice.say("Tombolino! Il premio di consolazione va alla \(who)\(bravo)! Grazie a tutti e buone feste!", after: 1)
+                finishGame()
+            default:
+                voice.say("Abbiamo \(p.withArticle)! Ha vinto la \(who)\(bravo)!", after: 1)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + repeatDelay + 2) { [weak self] in self?.showBanner(w) }
-            if pauseAfterWin && p != .tombola { pause() }
+            if pauseAfterWin && !finished { pause() }
+            if finished { break }
         }
+    }
+
+    private func finishGame() {
+        finished = true
+        stopTimerOnly()
     }
 
     private func showBanner(_ w: Win) {
@@ -227,6 +255,38 @@ final class TombolaGame: ObservableObject {
     private func loadLogo() {
         logoPNG = try? Data(contentsOf: logoFile)
         logo = logoPNG.flatMap { NSImage(data: $0) }
+    }
+
+    // MARK: Immagine di sfondo del maxi schermo
+
+    private var backgroundFile: URL { AppPaths.support.appendingPathComponent("sfondo-tombola.jpg") }
+
+    func chooseBackground() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.image]
+        p.message = "Scegli l'immagine di sfondo (foto del locale, logo grande, tema natalizio…)"
+        guard p.runModal() == .OK, let u = p.url, let img = NSImage(contentsOf: u) else { return }
+        // Ridotta a 1920 px e salvata in JPEG: leggera anche su schermi grandi.
+        let maxSide: CGFloat = 1920
+        let sz = img.size
+        let k = min(1, maxSide / max(sz.width, sz.height, 1))
+        let out = NSImage(size: NSSize(width: sz.width * k, height: sz.height * k))
+        out.lockFocus()
+        img.draw(in: NSRect(origin: .zero, size: out.size))
+        out.unlockFocus()
+        guard let tiff = out.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+              let jpg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
+        try? jpg.write(to: backgroundFile)
+        loadBackground()
+    }
+
+    func removeBackground() {
+        try? FileManager.default.removeItem(at: backgroundFile)
+        loadBackground()
+    }
+
+    private func loadBackground() {
+        backgroundImage = NSImage(contentsOf: backgroundFile)
     }
 
     // MARK: Server per i telefoni
@@ -354,6 +414,8 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
     var voiceID = ""
     var useEleven = false
     var elevenVoice = defaultElevenVoice
+    /// true quando la voce sta per parlare o sta parlando, false quando ha finito tutte le frasi.
+    var onSpeaking: ((Bool) -> Void)?
     private let synth = AVSpeechSynthesizer()
     private var player: AVAudioPlayer?
     private var queue: [(String, Double)] = []
@@ -394,6 +456,7 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
 
     func say(_ text: String, after delay: Double = 0) {
         queue.append((text, delay))
+        onSpeaking?(true)
         pump()
     }
 
@@ -403,6 +466,7 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
         synth.stopSpeaking(at: .immediate)
         player?.stop()
         busy = false
+        onSpeaking?(false)
     }
 
     private func pump() {
@@ -423,6 +487,14 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
 
     private func finished() {
         busy = false
+        if queue.isEmpty {
+            // La musica risale poco dopo l'ultima frase (se nel frattempo non ne arriva un'altra).
+            let gen = generation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self = self, gen == self.generation, !self.busy, self.queue.isEmpty else { return }
+                self.onSpeaking?(false)
+            }
+        }
         pump()
     }
 

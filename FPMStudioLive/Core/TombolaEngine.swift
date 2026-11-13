@@ -8,9 +8,21 @@ struct TombolaCard: Codable, Equatable {
     var numbers: [Int] { rows.flatMap { $0 }.filter { $0 > 0 } }
 }
 
-/// Premi in ordine: ambo, terno, quaterna, cinquina (numeri sulla stessa riga) e tombola (tutti i 15).
+/// Premi in ordine: ambo, terno, quaterna, cinquina (numeri sulla stessa riga), tombola (tutti i 15)
+/// e tombolino, il premio di consolazione per la seconda cartella che completa tutti i numeri.
 enum TombolaPrize: Int, CaseIterable, Codable {
-    case ambo = 2, terno = 3, quaterna = 4, cinquina = 5, tombola = 15
+    case ambo, terno, quaterna, cinquina, tombola, tombolino
+    /// Numeri necessari: sulla stessa riga (ambo…cinquina) o in tutta la cartella (tombola, tombolino).
+    var needed: Int {
+        switch self {
+        case .ambo: return 2
+        case .terno: return 3
+        case .quaterna: return 4
+        case .cinquina: return 5
+        case .tombola, .tombolino: return 15
+        }
+    }
+    var isFullCard: Bool { self == .tombola || self == .tombolino }
     var name: String {
         switch self {
         case .ambo: return "Ambo"
@@ -18,6 +30,16 @@ enum TombolaPrize: Int, CaseIterable, Codable {
         case .quaterna: return "Quaterna"
         case .cinquina: return "Cinquina"
         case .tombola: return "Tombola"
+        case .tombolino: return "Tombolino"
+        }
+    }
+    /// Con l'articolo, per la voce: "un ambo", "una quaterna", "il tombolino".
+    var withArticle: String {
+        switch self {
+        case .ambo, .terno: return "un \(name.lowercased())"
+        case .quaterna, .cinquina: return "una \(name.lowercased())"
+        case .tombola: return "la tombola"
+        case .tombolino: return "il tombolino"
         }
     }
     var next: TombolaPrize? {
@@ -119,6 +141,6 @@ enum TombolaEngine {
 
     static func achieves(_ card: TombolaCard, prize: TombolaPrize, drawn: Set<Int>) -> Bool {
         let s = score(card, drawn: drawn)
-        return prize == .tombola ? s.total >= 15 : s.bestRow >= prize.rawValue
+        return prize.isFullCard ? s.total >= 15 : s.bestRow >= prize.needed
     }
 }

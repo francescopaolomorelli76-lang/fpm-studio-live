@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import UniformTypeIdentifiers
 
 /// Sezione "Giochi" per i locali. Il primo gioco è la Tombola napoletana; qui si aggiungeranno gli altri.
 struct GamesView: View {
@@ -36,6 +37,7 @@ struct TombolaView: View {
             } right: {
                 VStack(alignment: .leading, spacing: 12) {
                     clientsPanel
+                    musicPanel
                     settingsPanel
                     voicePanel
                 }
@@ -84,7 +86,7 @@ struct TombolaView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(game.finished ? "Tombola fatta!" : "In palio: \(game.currentPrize?.name ?? "—")").font(.system(size: 13, weight: .bold))
+                    Text(game.finished ? "Partita finita!" : "In palio: \(game.currentPrize?.name ?? "—")").font(.system(size: 13, weight: .bold))
                     Text(game.running ? "Prossimo numero tra \(formatTime(Double(game.secondsToNext)))" : "In pausa · usciti \(game.drawn.count)/90")
                         .font(.system(size: 12)).foregroundColor(Theme.soft)
                 }
@@ -164,6 +166,12 @@ struct TombolaView: View {
 
     // MARK: Impostazioni
 
+    // MARK: Musica di sottofondo
+
+    private var musicPanel: some View {
+        TombolaMusicPanel(music: game.music)
+    }
+
     private var settingsPanel: some View {
         Panel(title: "Impostazioni", icon: "gearshape") {
             VStack(alignment: .leading, spacing: 4) {
@@ -183,7 +191,19 @@ struct TombolaView: View {
                 Button(game.logo == nil ? "Scegli il logo del locale…" : "Cambia logo…") { game.chooseLogo() }.buttonStyle(NeonButtonStyle(prominent: false))
                 if game.logo != nil { Button("Togli") { game.removeLogo() }.buttonStyle(.borderless) }
             }
+            HStack {
+                if let img = game.backgroundImage { Image(nsImage: img).resizable().scaledToFill().frame(width: 60, height: 34).clipped().cornerRadius(4) }
+                Button(game.backgroundImage == nil ? "Scegli l'immagine di sfondo…" : "Cambia sfondo…") { game.chooseBackground() }.buttonStyle(NeonButtonStyle(prominent: false))
+                if game.backgroundImage != nil { Button("Togli") { game.removeBackground() }.buttonStyle(.borderless) }
+            }
+            if game.backgroundImage != nil {
+                Text("Visibilità dello sfondo: \(Int(game.backgroundOpacity * 100))%").font(.system(size: 12, weight: .semibold))
+                Slider(value: $game.backgroundOpacity, in: 0.1...0.8)
+                Text("Lo sfondo resta dietro al numero e al tabellone: guarda l'anteprima e regola finché tutto si legge bene.")
+                    .font(.system(size: 10)).foregroundColor(Theme.soft)
+            }
             Toggle("Grafica natalizia (neve e lucine)", isOn: $game.christmas)
+            Toggle("Tombolino (premio di consolazione dopo la tombola)", isOn: $game.tombolino)
             Toggle("Pausa dopo ogni vincita (per controllare la cartella)", isOn: $game.pauseAfterWin)
             Toggle("Smorfia per famiglie (detti più delicati)", isOn: $game.familyMode)
         }
@@ -214,5 +234,65 @@ struct TombolaView: View {
             }
         }
         .onAppear { elevenKeyMissing = Keychain.get(MusicProvider.elevenLabs.rawValue).isEmpty }
+    }
+}
+
+struct TombolaMusicPanel: View {
+    @ObservedObject var music: TombolaMusic
+
+    var body: some View {
+        Panel(title: "Musica di sottofondo", icon: "music.note.list") {
+            HStack(spacing: 8) {
+                Button(action: { music.toggle() }) { Label(music.isPlaying ? "Ferma" : "Suona", systemImage: music.isPlaying ? "stop.fill" : "play.fill") }
+                    .buttonStyle(NeonButtonStyle()).disabled(music.tracks.isEmpty)
+                Button(action: { music.next() }) { Image(systemName: "forward.fill") }
+                    .buttonStyle(NeonButtonStyle(prominent: false)).disabled(music.tracks.isEmpty).help("Brano successivo")
+                Button("Aggiungi brani o cartelle…") { music.addFiles() }.buttonStyle(NeonButtonStyle(prominent: false))
+            }
+            if music.isPlaying, !music.currentTitle.isEmpty {
+                Text("♪ \(music.currentTitle)").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.cyan).lineLimit(1)
+            }
+            Text("Volume musica: \(Int(music.volume * 100))%").font(.system(size: 12, weight: .semibold))
+            Slider(value: $music.volume, in: 0...1)
+            Text("Mentre parla la voce: \(Int(music.duckLevel * 100))% del volume").font(.system(size: 12, weight: .semibold))
+            Slider(value: $music.duckLevel, in: 0...0.8)
+            Toggle("Ordine casuale", isOn: $music.shuffle)
+            Toggle("Parte da sola con la partita", isOn: $music.autoStart)
+            if let e = music.error { Text(e).font(.system(size: 11)).foregroundColor(Theme.warn) }
+            if music.tracks.isEmpty {
+                Text("Aggiungi i tuoi MP3 (per esempio una cartella di canzoni di Natale): suonano uno dopo l'altro per tutta la serata e si abbassano da soli quando la voce dice i numeri.")
+                    .font(.system(size: 11)).foregroundColor(Theme.soft)
+            } else {
+                HStack {
+                    Text("\(music.tracks.count) brani in scaletta").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.soft)
+                    Spacer()
+                    Button("Svuota") { music.clear() }.buttonStyle(.borderless).font(.system(size: 11))
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(music.tracks.enumerated()), id: \.offset) { i, u in
+                            HStack(spacing: 6) {
+                                Image(systemName: music.currentIndex == i && music.isPlaying ? "speaker.wave.2.fill" : "music.note")
+                                    .font(.system(size: 10)).foregroundColor(music.currentIndex == i ? Theme.cyan : Theme.soft)
+                                Text(u.deletingPathExtension().lastPathComponent).font(.system(size: 11)).lineLimit(1)
+                                Spacer()
+                                Button(action: { music.playIndex(i) }) { Image(systemName: "play.circle") }.buttonStyle(.borderless).help("Suona questo")
+                                Button(action: { music.remove(at: i) }) { Image(systemName: "xmark.circle") }.buttonStyle(.borderless).help("Togli dalla scaletta")
+                            }
+                        }
+                    }
+                }.frame(maxHeight: 160)
+            }
+            Text("Amazon Music, Spotify e simili non permettono ad altre app di suonare i loro brani. Puoi tenerli aperti sul Mac a volume basso: la voce si sentirà sopra, ma senza abbassamento automatico. Con i tuoi MP3 invece è tutto automatico.")
+                .font(.system(size: 10)).foregroundColor(Theme.soft)
+        }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            for p in providers {
+                _ = p.loadObject(ofClass: URL.self) { url, _ in
+                    if let u = url { DispatchQueue.main.async { music.add([u]) } }
+                }
+            }
+            return true
+        }
     }
 }

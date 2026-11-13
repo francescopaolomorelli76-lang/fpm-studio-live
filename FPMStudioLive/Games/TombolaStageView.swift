@@ -15,6 +15,7 @@ struct TombolaStageView: View {
             let s = min(geo.size.width / 1600, geo.size.height / 900)
             ZStack {
                 background
+                if let bg = game.backgroundImage { venueBackground(bg, size: geo.size) }
                 if game.christmas { SnowView().allowsHitTesting(false); ChristmasLights().frame(height: 26 * s).frame(maxHeight: .infinity, alignment: .top) }
                 VStack(spacing: 18 * s) {
                     topBar(s)
@@ -45,6 +46,19 @@ struct TombolaStageView: View {
                 Theme.background
             }
         }
+    }
+
+    /// Immagine del locale dietro a tutto: trasparente e scurita ai bordi, così numeri e tabellone restano leggibili.
+    private func venueBackground(_ img: NSImage, size: CGSize) -> some View {
+        ZStack {
+            Image(nsImage: img).resizable().scaledToFill()
+                .frame(width: size.width, height: size.height).clipped()
+                .opacity(game.backgroundOpacity)
+            RadialGradient(gradient: Gradient(colors: [Color.black.opacity(0.0), Color.black.opacity(0.55)]),
+                           center: .center, startRadius: size.width * 0.2, endRadius: size.width * 0.75)
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
     }
 
     private func topBar(_ s: CGFloat) -> some View {
