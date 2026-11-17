@@ -32,7 +32,7 @@ final class TombolaGame: ObservableObject {
     @Published var pauseAfterWin: Bool { didSet { d.set(pauseAfterWin, forKey: "tmb.pauseWin") } }
     @Published var venueName: String { didSet { d.set(venueName, forKey: "tmb.venue") } }
     @Published var voiceID: String { didSet { d.set(voiceID, forKey: "tmb.voice"); voice.voiceID = voiceID } }
-    @Published var useElevenLabs: Bool { didSet { d.set(useElevenLabs, forKey: "tmb.eleven"); voice.useEleven = useElevenLabs } }
+    @Published var voiceSource: TombolaVoiceSource { didSet { d.set(voiceSource.rawValue, forKey: "tmb.voiceSource"); voice.source = voiceSource } }
     @Published var elevenVoiceID: String { didSet { d.set(elevenVoiceID, forKey: "tmb.elevenVoice"); voice.elevenVoice = elevenVoiceID } }
     /// Premio di consolazione dopo la tombola: la seconda cartella che completa tutti i numeri.
     @Published var tombolino: Bool { didSet { d.set(tombolino, forKey: "tmb.tombolino") } }
@@ -81,12 +81,12 @@ final class TombolaGame: ObservableObject {
         pauseAfterWin = d.object(forKey: "tmb.pauseWin") as? Bool ?? true
         venueName = d.string(forKey: "tmb.venue") ?? ""
         voiceID = d.string(forKey: "tmb.voice") ?? ""
-        useElevenLabs = d.bool(forKey: "tmb.eleven")
+        voiceSource = TombolaVoiceSource(rawValue: d.string(forKey: "tmb.voiceSource") ?? "") ?? .recorded
         elevenVoiceID = d.string(forKey: "tmb.elevenVoice") ?? TombolaVoice.defaultElevenVoice
         tombolino = d.object(forKey: "tmb.tombolino") as? Bool ?? true
         backgroundOpacity = d.object(forKey: "tmb.bgOpacity") as? Double ?? 0.35
         voice.voiceID = voiceID
-        voice.useEleven = useElevenLabs
+        voice.source = voiceSource
         voice.elevenVoice = elevenVoiceID
         voice.onSpeaking = { [weak music] on in music?.duck(on) }
         loadLogo()
@@ -122,7 +122,8 @@ final class TombolaGame: ObservableObject {
         if !running {
             running = true
             if drawn.isEmpty {
-                voice.say("Benvenuti alla tombola napoletana" + (venueName.isEmpty ? "" : " di \(venueName)") + "! Scegliete la vostra cartella. Si comincia!")
+                voice.say("Benvenuti alla tombola napoletana" + (venueName.isEmpty ? "" : " di \(venueName)") + "! Scegliete la vostra cartella. Si comincia!",
+                          clips: ["benvenuti"])
                 nextDrawAt = Date().addingTimeInterval(min(12, intervalSeconds))
             } else {
                 nextDrawAt = Date().addingTimeInterval(pausedRemaining ?? intervalSeconds)
@@ -161,7 +162,7 @@ final class TombolaGame: ObservableObject {
     func repeatLast() {
         guard let n = current else { return }
         let s = smorfia(n)
-        voice.say("Ripeto: \(n)! \(Smorfia.spoken(s.napoletano))!")
+        voice.say("Ripeto: \(n)! \(Smorfia.spoken(s.napoletano))!", clips: ["ripeto", repClip(n)])
     }
 
     func releaseCard(_ id: Int) { players[id] = nil }
@@ -180,8 +181,23 @@ final class TombolaGame: ObservableObject {
         NSSound(named: "Glass")?.play()
         let s = smorfia(n)
         let intro = TombolaGame.intros.randomElement() ?? "Numero"
-        voice.say("\(intro) \(n)!", after: 0.6)
-        voice.say("\(n)... \(Smorfia.spoken(s.napoletano))! \(s.italiano).", after: repeatDelay)
+        voice.say("\(intro) \(n)!", clips: ["num_\(n)"], after: 0.6)
+        voice.say("\(n)... \(Smorfia.spoken(s.napoletano))! \(s.italiano).", clips: [repClip(n)], after: repeatDelay)
+    }
+
+    /// Frase registrata con il detto del numero (versione per famiglie quando serve).
+    func repClip(_ n: Int) -> String {
+        familyMode && Smorfia.hasFamilyVersion(n) ? "rep_\(n)_f" : "rep_\(n)"
+    }
+
+    /// "Ha vinto la cartella numero 3 e la cartella numero 12".
+    private func winnerClips(_ ids: [Int]) -> [String] {
+        var c = ["havinto"]
+        for (i, id) in ids.enumerated() {
+            if i > 0 { c.append("e") }
+            c.append("c_\(id)")
+        }
+        return c
     }
 
     private func checkWins(number n: Int) {
@@ -202,17 +218,21 @@ final class TombolaGame: ObservableObject {
             switch p {
             case .tombola:
                 if tombolino {
-                    voice.say("Tombolaaa! Ha vinto la \(who)\(bravo)! Ma non è finita: adesso si gioca il tombolino!", after: 1)
+                    voice.say("Tombola! Ha vinto la \(who)\(bravo)! Ma non è finita: adesso si gioca il tombolino!",
+                              clips: ["tombola"] + winnerClips(ids) + ["complimenti", "si_gioca_tombolino"], after: 1)
                 } else {
-                    voice.say("Tombolaaa! Ha vinto la \(who)\(bravo)! Buone feste a tutti!", after: 1)
+                    voice.say("Tombola! Ha vinto la \(who)\(bravo)! Buone feste a tutti!",
+                              clips: ["tombola"] + winnerClips(ids) + ["complimenti", "fine"], after: 1)
                     currentPrize = nil
                     finishGame()
                 }
             case .tombolino:
-                voice.say("Tombolino! Il premio di consolazione va alla \(who)\(bravo)! Grazie a tutti e buone feste!", after: 1)
+                voice.say("Tombolino! Il premio di consolazione va alla \(who)\(bravo)! Grazie a tutti e buone feste!",
+                          clips: ["tombolino"] + winnerClips(ids) + ["complimenti", "fine"], after: 1)
                 finishGame()
             default:
-                voice.say("Abbiamo \(p.withArticle)! Ha vinto la \(who)\(bravo)!", after: 1)
+                voice.say("Abbiamo \(p.withArticle)! Ha vinto la \(who)\(bravo)!",
+                          clips: ["\(p.name.lowercased())"] + winnerClips(ids) + ["complimenti"], after: 1)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + repeatDelay + 2) { [weak self] in self?.showBanner(w) }
             if pauseAfterWin && !finished { pause() }
@@ -405,20 +425,35 @@ final class TombolaGame: ObservableObject {
     }
 }
 
-/// Voce della tombola: voce di sistema italiana (la migliore femminile installata) oppure ElevenLabs.
+/// Da dove viene la voce della tombola.
+enum TombolaVoiceSource: String, CaseIterable, Identifiable {
+    case recorded, system, eleven
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .recorded: return "Sara – voce italiana inclusa (consigliata)"
+        case .system: return "Voce del Mac"
+        case .eleven: return "ElevenLabs (chiave in AI Studio)"
+        }
+    }
+}
+
+/// Voce della tombola. Per default usa le frasi registrate con la voce neurale italiana "Sara"
+/// (incluse nell'app, funzionano senza internet); in alternativa la voce del Mac o ElevenLabs.
 /// Le frasi vengono dette una dopo l'altra, con la pausa richiesta prima di ciascuna.
 final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     static let defaultElevenVoice = "21m00Tcm4TlvDq8ikWAM"
     private static let femaleNames = ["federica", "alice", "paola", "emma", "chiara", "silvia", "elsa", "giulia", "sara"]
 
     var voiceID = ""
-    var useEleven = false
+    var source: TombolaVoiceSource = .recorded
     var elevenVoice = defaultElevenVoice
     /// true quando la voce sta per parlare o sta parlando, false quando ha finito tutte le frasi.
     var onSpeaking: ((Bool) -> Void)?
     private let synth = AVSpeechSynthesizer()
     private var player: AVAudioPlayer?
-    private var queue: [(String, Double)] = []
+    private var queue: [(String, [String], Double)] = []
+    private var clipQueue: [URL] = []
     private var busy = false
     private var generation = 0
 
@@ -454,8 +489,15 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
         return TombolaVoice.italianVoices.first ?? AVSpeechSynthesisVoice(language: "it-IT")
     }
 
-    func say(_ text: String, after delay: Double = 0) {
-        queue.append((text, delay))
+    /// URL di una frase registrata (tmb_<nome>.mp3 nell'app).
+    static func clipURL(_ name: String) -> URL? {
+        Bundle.main.url(forResource: "tmb_" + name, withExtension: "mp3")
+            ?? Bundle.main.url(forResource: "tmb_" + name, withExtension: "mp3", subdirectory: "VoceTombola")
+    }
+
+    /// `text` è la frase completa (voce del Mac, ElevenLabs); `clips` le stesse parole registrate da Sara.
+    func say(_ text: String, clips: [String] = [], after delay: Double = 0) {
+        queue.append((text, clips, delay))
         onSpeaking?(true)
         pump()
     }
@@ -465,6 +507,7 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
         queue.removeAll()
         synth.stopSpeaking(at: .immediate)
         player?.stop()
+        clipQueue.removeAll()
         busy = false
         onSpeaking?(false)
     }
@@ -472,13 +515,17 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
     private func pump() {
         guard !busy, !queue.isEmpty else { return }
         busy = true
-        let (text, delay) = queue.removeFirst()
+        let (text, clips, delay) = queue.removeFirst()
         let gen = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self = self, gen == self.generation else { return }
             let key = Keychain.get(MusicProvider.elevenLabs.rawValue)
-            if self.useEleven, !key.isEmpty {
+            let urls = clips.compactMap { TombolaVoice.clipURL($0) }
+            if self.source == .eleven, !key.isEmpty {
                 self.speakEleven(text, key: key, gen: gen)
+            } else if self.source == .recorded, !clips.isEmpty, urls.count == clips.count {
+                self.clipQueue = urls
+                self.playNextClip()
             } else {
                 self.speakSystem(text)
             }
@@ -544,6 +591,11 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
         }.resume()
     }
 
+    private func playNextClip() {
+        guard !clipQueue.isEmpty else { finished(); return }
+        playFile(clipQueue.removeFirst())
+    }
+
     private func playFile(_ u: URL) {
         guard let p = try? AVAudioPlayer(contentsOf: u) else { finished(); return }
         p.delegate = self
@@ -552,6 +604,6 @@ final class TombolaVoice: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDe
     }
 
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        DispatchQueue.main.async { self.finished() }
+        DispatchQueue.main.async { if self.clipQueue.isEmpty { self.finished() } else { self.playNextClip() } }
     }
 }

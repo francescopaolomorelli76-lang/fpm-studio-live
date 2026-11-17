@@ -37,6 +37,7 @@ struct TombolaView: View {
             } right: {
                 VStack(alignment: .leading, spacing: 12) {
                     clientsPanel
+                    BluetoothPanel()
                     musicPanel
                     settingsPanel
                     voicePanel
@@ -211,21 +212,27 @@ struct TombolaView: View {
 
     private var voicePanel: some View {
         Panel(title: "Voce", icon: "person.wave.2.fill") {
-            let voices = TombolaVoice.italianVoices
-            Picker("Voce del Mac", selection: $game.voiceID) {
-                Text("Automatica (la migliore voce femminile)").tag("")
-                ForEach(voices, id: \.identifier) { v in Text(TombolaVoice.label(v)).tag(v.identifier) }
+            Picker("Voce", selection: $game.voiceSource) {
+                ForEach(TombolaVoiceSource.allCases) { v in Text(v.label).tag(v) }
             }
             Button("Prova la voce") {
                 let n = Int.random(in: 1...90), e = game.smorfia(n)
-                game.voice.say("Numero \(n)!")
-                game.voice.say("\(n)... \(Smorfia.spoken(e.napoletano))! \(e.italiano).", after: 1.5)
+                game.voice.say("Numero \(n)!", clips: ["num_\(n)"])
+                game.voice.say("\(n)... \(Smorfia.spoken(e.napoletano))! \(e.italiano).", clips: [game.repClip(n)], after: 1.5)
             }.buttonStyle(NeonButtonStyle(prominent: false))
-            Text("Per una voce più naturale scarica gratis \"Federica\" (Premium): Impostazioni di Sistema › Accessibilità › Contenuti letti ad alta voce › Voce di sistema › Gestisci voci › Italiano. Su Monterey: Preferenze di Sistema › Accessibilità › Contenuto vocale › Voce di sistema › Personalizza.")
-                .font(.system(size: 10)).foregroundColor(Theme.soft)
-            Divider().background(Theme.line)
-            Toggle("Voce ElevenLabs (più umana, richiede la chiave in AI Studio)", isOn: $game.useElevenLabs)
-            if game.useElevenLabs {
+            switch game.voiceSource {
+            case .recorded:
+                Text("Sara è una voce neurale italiana registrata dentro l'app: suona naturale, non serve internet e non costa nulla. Il nome del locale e i nomi dei vincitori compaiono sullo schermo.")
+                    .font(.system(size: 10)).foregroundColor(Theme.soft)
+            case .system:
+                let voices = TombolaVoice.italianVoices
+                Picker("Voce del Mac", selection: $game.voiceID) {
+                    Text("Automatica (la migliore voce femminile)").tag("")
+                    ForEach(voices, id: \.identifier) { v in Text(TombolaVoice.label(v)).tag(v.identifier) }
+                }
+                Text("Le voci base del Mac sono robotiche: scarica gratis \"Federica\" (Premium) in Impostazioni di Sistema › Accessibilità › Contenuti letti ad alta voce › Voce di sistema › Gestisci voci › Italiano.")
+                    .font(.system(size: 10)).foregroundColor(Theme.soft)
+            case .eleven:
                 TextField("ID della voce ElevenLabs", text: $game.elevenVoiceID).textFieldStyle(.roundedBorder)
                 Text(elevenKeyMissing
                      ? "Manca la chiave ElevenLabs: inseriscila in AI Studio. Fino ad allora parla la voce del Mac."

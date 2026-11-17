@@ -19,6 +19,8 @@ enum Smorfia {
         71: ("L'uomo da niente", "L'ommo 'e niente", "🤷"),
     ]
 
+    static func hasFamilyVersion(_ n: Int) -> Bool { familyVersion[n] != nil }
+
     static func entry(_ n: Int, family: Bool = false) -> SmorfiaEntry {
         guard n >= 1, n <= 90 else { return SmorfiaEntry(number: n, italiano: "", napoletano: "", simbolo: "") }
         if family, let f = familyVersion[n] { return SmorfiaEntry(number: n, italiano: f.0, napoletano: f.1, simbolo: f.2) }

@@ -1,0 +1,2 @@
+Frasi della tombola generate con Kokoro-82M (hexgrad, licenza Apache 2.0), voce italiana "if_sara".
+Testi: FPM Studio Live. Uso libero anche commerciale, secondo la licenza Apache 2.0 del modello.

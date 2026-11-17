@@ -24,6 +24,8 @@
 	<string>public.app-category.music</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>FPM Studio Live usa il Bluetooth per collegare casse e cuffie su cui suonano la voce della tombola e la musica.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>FPM Studio Live usa il microfono per cantare con riverbero ed eco sulle basi karaoke.</string>
 	<key>NSHumanReadableCopyright</key>

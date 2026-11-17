@@ -28,7 +28,7 @@ for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, SRC)):
             files.append((rel, "assets"))
         elif f.endswith(".js"):
             files.append((rel, "js"))
-        elif f.endswith(".sf2") or f.endswith("LICENZA.txt"):
+        elif f.endswith(".sf2") or f.endswith("LICENZA.txt") or (f.endswith(".mp3") and "VoceTombola" in rel):
             files.append((rel, "res"))
         elif f == "Info.plist":
             files.append((rel, "plist"))
