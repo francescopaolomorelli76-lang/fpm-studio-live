@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: macos-latest
+    # Mac Intel di GitHub: di solito meno affollati. L'app resta universale (Apple Silicon + Intel).
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - name: Chiave di attivazione (dal segreto del repository, mai nel codice)
