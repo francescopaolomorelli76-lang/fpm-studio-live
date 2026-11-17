@@ -1,0 +1,7 @@
+name: Prova runner Linux (temporanea)
+on: [push]
+jobs:
+  prova:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "runner Linux disponibile"
