@@ -5,12 +5,13 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case karaoke, dj, games, piano, ai, advanced
+    case karaoke, dj, audioLab, games, piano, ai, advanced
     var id: String { rawValue }
     var label: String {
         switch self {
         case .karaoke: return "Karaoke"
         case .dj: return "Atomix"
+        case .audioLab: return "Audio Lab"
         case .games: return "Giochi"
         case .piano: return "Piano Studio"
         case .ai: return "AI Studio"
@@ -21,6 +22,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .karaoke: return "music.mic"
         case .dj: return "dial.max"
+        case .audioLab: return "waveform"
         case .games: return "circle.grid.3x3.fill"
         case .piano: return "pianokeys"
         case .ai: return "wand.and.stars"
@@ -44,6 +46,7 @@ struct ContentView: View {
     @EnvironmentObject var recorder: VoiceRecorder
     @EnvironmentObject var shortcuts: ShortcutManager
     @EnvironmentObject var tombola: TombolaGame
+    @EnvironmentObject var audioLab: AudioLabModel
     @State private var section: AppSection = .karaoke
     @State private var showLibrary = true
     /// L'app si apre solo dopo il codice di attivazione (se la versione lo richiede). Va inserito a ogni apertura.
@@ -68,6 +71,8 @@ struct ContentView: View {
                             KaraokeView(player: player, library: library, mic: mic)
                         case .dj:
                             ScrollView(.vertical) { DJView(dj: dj, library: library).padding(.trailing, 6) }
+                        case .audioLab:
+                            ScrollView(.vertical) { AudioLabView(model: audioLab).padding(.trailing, 6) }
                         case .games:
                             ScrollView(.vertical) { GamesView(tombola: tombola).padding(.trailing, 6) }
                         case .piano:
