@@ -14,8 +14,10 @@ jobs:
       - name: Chiave di attivazione (dal segreto del repository, mai nel codice)
         env:
           FPM_ACTIVATION_SECRET: ${{ secrets.FPM_ACTIVATION_SECRET }}
+          # Codice all'apertura: "si" = richiesto, "no" = disattivato (momentaneamente). Il segreto resta salvato.
+          ATTIVAZIONE: "no"
         run: |
-          if [ -n "$FPM_ACTIVATION_SECRET" ]; then
+          if [ "$ATTIVAZIONE" = "si" ] && [ -n "$FPM_ACTIVATION_SECRET" ]; then
             python3 - <<'PY'
           import os
           key = os.environ["FPM_ACTIVATION_SECRET"].strip().replace(" ", "").upper().encode()
@@ -27,7 +29,7 @@ jobs:
           print("Attivazione richiesta in questa versione")
           PY
           else
-            echo "Nessun segreto FPM_ACTIVATION_SECRET: versione senza attivazione"
+            echo "Attivazione disattivata (ATTIVAZIONE=$ATTIVAZIONE) o segreto assente: versione senza codice"
           fi
       - name: Compila (universale Intel + Apple Silicon)
         run: |
